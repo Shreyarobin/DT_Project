@@ -1,0 +1,2966 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Robotic Arm Pro — 6-DOF Industrial Simulator v6</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg: #060a0f;
+      --panel: #0c1420;
+      --border: #1a3a5c;
+      --accent: #00d4ff;
+      --accent2: #ff6b00;
+      --accent3: #00ff88;
+      --text: #c8e0f0;
+      --muted: #4a7a9b;
+      --danger: #ff3366;
+      --glow: 0 0 20px rgba(0,212,255,0.4);
+    }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Share Tech Mono', monospace;
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    #topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 20px;
+      background: linear-gradient(90deg, #0a1828, #0c1e30);
+      border-bottom: 1px solid var(--border);
+      z-index: 200;
+      flex-shrink: 0;
+    }
+    #topbar h1 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 14px;
+      letter-spacing: 3px;
+      color: var(--accent);
+      text-shadow: var(--glow);
+    }
+    #status-bar { display: flex; gap: 20px; font-size: 11px; }
+    .status-item { display: flex; align-items: center; gap: 6px; }
+    .status-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--accent3);
+      box-shadow: 0 0 8px var(--accent3);
+      animation: pulse 2s infinite;
+    }
+    .status-dot.warn { background: var(--accent2); box-shadow: 0 0 8px var(--accent2); }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    #main { display: flex; flex: 1; overflow: hidden; }
+    #canvas-wrap { flex: 1; position: relative; }
+    #canvas-wrap canvas { display: block; width: 100% !important; height: 100% !important; }
+    #hud-tl {
+      position: absolute; top: 12px; left: 12px;
+      font-size: 10px; color: var(--muted);
+      line-height: 1.8; pointer-events: none;
+    }
+    #hud-tr {
+      position: absolute; top: 12px; right: 12px;
+      font-size: 10px; color: var(--muted);
+      line-height: 1.8; text-align: right; pointer-events: none;
+    }
+    #hud-tl span, #hud-tr span { color: var(--accent); }
+    #hud-tr span.collision { color: var(--danger); animation: pulse 0.4s infinite; }
+    #crosshair {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%,-50%);
+      width: 30px; height: 30px; pointer-events: none; opacity: 0.4;
+    }
+    #crosshair::before, #crosshair::after {
+      content:''; position:absolute; background: var(--accent);
+    }
+    #crosshair::before { width:1px; height:100%; left:50%; top:0; }
+    #crosshair::after  { width:100%; height:1px; top:50%; left:0; }
+    #mode-badge {
+      position: absolute; bottom: 16px; left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,212,255,0.1);
+      border: 1px solid var(--border);
+      padding: 6px 16px; font-size: 11px; letter-spacing: 2px;
+      color: var(--accent); pointer-events: none;
+    }
+    #ctrl-panel {
+      width: 280px; background: var(--panel);
+      border-left: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      overflow-y: auto; flex-shrink: 0;
+    }
+    #ctrl-panel::-webkit-scrollbar { width: 4px; }
+    #ctrl-panel::-webkit-scrollbar-track { background: var(--bg); }
+    #ctrl-panel::-webkit-scrollbar-thumb { background: var(--border); }
+    .panel-section { border-bottom: 1px solid var(--border); padding: 12px 14px; }
+    .panel-title {
+      font-family: 'Orbitron', sans-serif; font-size: 9px;
+      letter-spacing: 3px; color: var(--muted); margin-bottom: 10px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .panel-title::after { content:''; flex: 1; height: 1px; background: var(--border); }
+    .joint-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .joint-label { width: 80px; font-size: 10px; color: var(--muted); flex-shrink: 0; }
+    .joint-label span { display: block; font-size: 9px; color: #2a5a7c; }
+    .joint-slider {
+      flex: 1; -webkit-appearance: none; height: 3px;
+      background: var(--border); border-radius: 2px; outline: none; cursor: pointer;
+    }
+    .joint-slider::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%;
+      background: var(--accent); box-shadow: 0 0 8px var(--accent); cursor: pointer;
+    }
+    .joint-slider.s2::-webkit-slider-thumb { background: var(--accent2); box-shadow: 0 0 8px var(--accent2); }
+    .joint-slider.s3::-webkit-slider-thumb { background: var(--accent3); box-shadow: 0 0 8px var(--accent3); }
+    .joint-val { width: 42px; font-size: 10px; color: var(--accent); text-align: right; flex-shrink: 0; }
+    .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 4px; }
+    .btn {
+      background: rgba(0,212,255,0.05); border: 1px solid var(--border);
+      color: var(--accent); font-family: 'Share Tech Mono', monospace;
+      font-size: 10px; letter-spacing: 1px; padding: 8px 4px;
+      cursor: pointer; transition: all 0.15s; text-transform: uppercase;
+    }
+    .btn:hover { background: rgba(0,212,255,0.15); border-color: var(--accent); box-shadow: var(--glow); }
+    .btn:active { transform: scale(0.97); }
+    .btn.danger { color: var(--danger); border-color: #3a1020; }
+    .btn.danger:hover { background: rgba(255,51,102,0.15); border-color: var(--danger); }
+    .btn.warn { color: var(--accent2); border-color: #3a2010; }
+    .btn.warn:hover { background: rgba(255,107,0,0.15); border-color: var(--accent2); }
+    .btn.success { color: var(--accent3); border-color: #103a20; }
+    .btn.success:hover { background: rgba(0,255,136,0.15); border-color: var(--accent3); }
+    .btn.full { grid-column: span 2; }
+    .key-hint { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; font-size: 10px; color: var(--muted); }
+    .key {
+      background: var(--bg); border: 1px solid var(--border);
+      padding: 2px 6px; font-size: 9px; color: var(--text); min-width: 22px; text-align: center;
+    }
+    .coord-row { display: flex; justify-content: space-between; font-size: 10px; margin-bottom: 4px; }
+    .coord-label { color: var(--muted); }
+    .coord-val { color: var(--accent3); }
+    .preset-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px; }
+    .preset-btn {
+      background: rgba(255,107,0,0.05); border: 1px solid #2a1a08;
+      color: var(--accent2); font-family: 'Share Tech Mono', monospace;
+      font-size: 9px; padding: 7px 3px; cursor: pointer;
+      letter-spacing: 1px; text-transform: uppercase; text-align: center; transition: all 0.15s;
+    }
+    .preset-btn:hover { background: rgba(255,107,0,0.15); border-color: var(--accent2); }
+    #toast {
+      position: absolute; top: 50px; left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0,212,255,0.15); border: 1px solid var(--accent);
+      padding: 8px 20px; font-size: 11px; letter-spacing: 2px; color: var(--accent);
+      pointer-events: none; opacity: 0; transition: opacity 0.3s; z-index: 300;
+    }
+    #toast.show { opacity: 1; }
+    #toast.warn-toast { background: rgba(255,51,102,0.15); border-color: var(--danger); color: var(--danger); }
+    #gripper-indicator { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+    .gripper-visual {
+      flex: 1; height: 20px; background: var(--bg);
+      border: 1px solid var(--border); position: relative; overflow: hidden;
+    }
+    .gripper-fill {
+      position: absolute; top: 0; left: 0; height: 100%;
+      background: linear-gradient(90deg, var(--accent3), var(--accent)); transition: width 0.3s;
+    }
+    .gripper-text { font-size: 10px; color: var(--muted); }
+    .speed-selector { display: flex; gap: 4px; }
+    .speed-btn {
+      flex: 1; background: var(--bg); border: 1px solid var(--border);
+      color: var(--muted); font-family: 'Share Tech Mono', monospace;
+      font-size: 9px; padding: 5px 2px; cursor: pointer; text-align: center; transition: all 0.15s;
+    }
+    .speed-btn.active { background: rgba(0,212,255,0.1); border-color: var(--accent); color: var(--accent); }
+
+    /* ── STOCHASTIC DASHBOARD ADDITIONS ── */
+    #flash-overlay {
+      position: absolute; inset: 0; pointer-events: none;
+      opacity: 0; transition: opacity 0.35s ease-out; z-index: 50;
+    }
+    #event-log {
+      position: absolute; bottom: 44px; left: 12px;
+      width: 240px; max-height: 160px;
+      background: rgba(6,10,15,0.88); border: 1px solid var(--border);
+      font-family: 'Share Tech Mono', monospace; font-size: 9px;
+      overflow: hidden; z-index: 100;
+    }
+    #event-log-title {
+      font-family: 'Orbitron', sans-serif; font-size: 8px; letter-spacing: 2px;
+      color: var(--muted); padding: 4px 8px; border-bottom: 1px solid var(--border);
+      display: flex; justify-content: space-between;
+    }
+    #event-log-body { padding: 4px 8px; overflow-y: auto; max-height: 130px; }
+    #event-log-body::-webkit-scrollbar { width: 3px; }
+    #event-log-body::-webkit-scrollbar-thumb { background: var(--border); }
+
+    /* Mini success-rate sparkline */
+    #sparkline-wrap {
+      position: absolute; bottom: 44px; right: 0;
+      width: 100%; padding: 4px 10px;
+      border-top: 1px solid var(--border);
+    }
+    #sparkline-canvas { width: 100%; height: 36px; display: block; }
+
+    .sim-badge {
+      display: inline-block; padding: 2px 8px; font-size: 9px;
+      letter-spacing: 1px; border-radius: 2px; margin-top: 3px;
+    }
+    .sim-badge.running { background: rgba(0,255,136,0.12); border: 1px solid #00ff88; color: #00ff88; }
+    .sim-badge.stopped { background: rgba(255,51,102,0.1); border: 1px solid #ff3366; color: #ff3366; }
+
+    /* fatigue bar */
+    .fatigue-bar-wrap { height: 6px; background: var(--bg); border: 1px solid var(--border); margin-top: 3px; }
+    .fatigue-bar-fill { height: 100%; background: linear-gradient(90deg, #00ff88, #ff6b00, #ff3366); transition: width 1s; }
+
+    #mc-results { background: rgba(0,0,0,0.3); }
+    #mc-chart { display: block; }
+    .mc-compare-row {
+      display: flex; gap: 4px; margin-bottom: 4px;
+    }
+    .mc-compare-cell {
+      flex: 1; background: rgba(0,0,0,0.3); border: 1px solid var(--border);
+      padding: 5px 6px; font-size: 9px;
+    }
+    .mc-compare-cell .label { color: var(--muted); font-size: 8px; letter-spacing: 1px; }
+    .mc-compare-cell .val   { font-size: 13px; font-weight: bold; margin-top: 2px; }
+
+    /* ── v6 ADDITIONS ── */
+    .prox-bar-wrap { height: 5px; background: var(--bg); border: 1px solid var(--border); margin-top: 2px; border-radius: 2px; }
+    .prox-bar-fill { height: 100%; border-radius: 2px; transition: width 0.1s, background 0.2s; }
+    .quality-bar-wrap { height: 5px; background: var(--bg); border: 1px solid var(--border); margin-top: 2px; border-radius: 2px; }
+    .quality-bar-fill { height: 100%; border-radius: 2px; background: linear-gradient(90deg, #ff3366, #ffcc00, #00ff88); transition: width 0.2s; }
+    #hud-tl span.prox-ok   { color: var(--accent3); }
+    #hud-tl span.prox-warn { color: #ffcc00; animation: pulse 0.6s infinite; }
+    #hud-tl span.prox-crit { color: var(--danger); animation: pulse 0.3s infinite; }
+  </style>
+</head>
+<body>
+
+<div id="topbar">
+  <h1>ROBOTIC ARM PRO &nbsp;|&nbsp; 6-DOF INDUSTRIAL SIMULATOR v6</h1>
+  <div id="status-bar">
+    <div class="status-item"><div class="status-dot"></div>ARM ONLINE</div>
+    <div class="status-item"><div class="status-dot warn"></div><span id="obj-count">22 OBJECTS</span></div>
+    <div class="status-item"><div class="status-dot" id="motion-dot" style="background:#2a5a7c;box-shadow:none"></div><span id="motion-label">IDLE</span></div>
+  </div>
+</div>
+
+<div id="main">
+  <div id="canvas-wrap">
+    <div id="hud-tl">
+      BASE ROT &nbsp;&nbsp;<span id="h-base">0°</span><br>
+      SHOULDER &nbsp;<span id="h-shoulder">0°</span><br>
+      ELBOW &nbsp;&nbsp;&nbsp;<span id="h-elbow">0°</span><br>
+      WRIST P &nbsp;&nbsp;<span id="h-wristp">0°</span><br>
+      WRIST R &nbsp;&nbsp;<span id="h-wristr">0°</span><br>
+      WRIST Y &nbsp;&nbsp;<span id="h-wristy">0°</span><br>
+      BASE X &nbsp;&nbsp;&nbsp;<span id="h-bx">0.00</span><br>
+      BASE Z &nbsp;&nbsp;&nbsp;<span id="h-bz">0.00</span>
+    </div>
+    <div id="hud-tr">
+      GRIPPER &nbsp;<span id="h-grip">50%</span><br>
+      HOLDING &nbsp;<span id="h-hold">NONE</span><br>
+      SPEED &nbsp;&nbsp;&nbsp;<span id="h-speed">NORMAL</span><br>
+      CAM DIST &nbsp;<span id="h-cam">3.0</span><br>
+      PROX &nbsp;&nbsp;&nbsp;&nbsp;<span id="h-prox" class="prox-ok">CLEAR</span><br>
+      QUALITY &nbsp;<span id="h-quality" style="color:var(--accent3)">—</span><br>
+      ENERGY &nbsp;&nbsp;<span id="h-energy" style="color:var(--accent2)">0°</span>
+    </div>
+    <div id="crosshair"></div>
+    <div id="mode-badge">DRAG TO ORBIT · SCROLL TO ZOOM · CLICK FLOOR TO DRIVE BASE · IJKL = MOVE BASE</div>
+    <div id="toast"></div>
+    <!-- Stochastic success/failure flash overlay -->
+    <div id="flash-overlay"></div>
+    <!-- Discrete event log panel -->
+    <div id="event-log">
+      <div id="event-log-title">
+        <span>⚡ EVENT LOG</span>
+        <span id="ev-sim-status" style="color:#ff3366">STOPPED</span>
+      </div>
+      <div id="event-log-body"></div>
+    </div>
+  </div>
+
+  <div id="ctrl-panel">
+
+    <div class="panel-section">
+      <div class="panel-title">JOINT CONTROL</div>
+      <div class="joint-row">
+        <div class="joint-label">BASE<span>Y-AXIS ±180°</span></div>
+        <input class="joint-slider" type="range" min="-180" max="180" value="0" id="sl-base">
+        <div class="joint-val" id="v-base">0°</div>
+      </div>
+      <div class="joint-row">
+        <div class="joint-label">SHOULDER<span>PITCH ±120°</span></div>
+        <input class="joint-slider s2" type="range" min="-120" max="120" value="0" id="sl-shoulder">
+        <div class="joint-val" id="v-shoulder">0°</div>
+      </div>
+      <div class="joint-row">
+        <div class="joint-label">ELBOW<span>PITCH ±150°</span></div>
+        <input class="joint-slider s2" type="range" min="-150" max="150" value="0" id="sl-elbow">
+        <div class="joint-val" id="v-elbow">0°</div>
+      </div>
+      <div class="joint-row">
+        <div class="joint-label">WRIST P<span>PITCH ±120°</span></div>
+        <input class="joint-slider s3" type="range" min="-120" max="120" value="0" id="sl-wristp">
+        <div class="joint-val" id="v-wristp">0°</div>
+      </div>
+      <div class="joint-row">
+        <div class="joint-label">WRIST R<span>ROLL ±180°</span></div>
+        <input class="joint-slider s3" type="range" min="-180" max="180" value="0" id="sl-wristr">
+        <div class="joint-val" id="v-wristr">0°</div>
+      </div>
+      <div class="joint-row">
+        <div class="joint-label">WRIST Y<span>YAW ±90°</span></div>
+        <input class="joint-slider s3" type="range" min="-90" max="90" value="0" id="sl-wristy">
+        <div class="joint-val" id="v-wristy">0°</div>
+      </div>
+      <div class="joint-row">
+        <div class="joint-label">GRIPPER<span>0=CLOSED</span></div>
+        <input class="joint-slider" type="range" min="0" max="100" value="50" id="sl-grip">
+        <div class="joint-val" id="v-grip">50%</div>
+      </div>
+      <div id="gripper-indicator">
+        <div class="gripper-text">GRIP</div>
+        <div class="gripper-visual"><div class="gripper-fill" id="grip-fill" style="width:50%"></div></div>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-title">SPEED</div>
+      <div class="speed-selector">
+        <div class="speed-btn" data-speed="0.3">SLOW</div>
+        <div class="speed-btn active" data-speed="1.0">NORM</div>
+        <div class="speed-btn" data-speed="2.5">FAST</div>
+        <div class="speed-btn" data-speed="5.0">MAX</div>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-title">PRESETS</div>
+      <div class="preset-grid">
+        <div class="preset-btn" id="p-home">HOME</div>
+        <div class="preset-btn" id="p-reach">REACH</div>
+        <div class="preset-btn" id="p-fold">FOLD</div>
+        <div class="preset-btn" id="p-left">LEFT</div>
+        <div class="preset-btn" id="p-right">RIGHT</div>
+        <div class="preset-btn" id="p-wave">WAVE</div>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-title">ACTIONS</div>
+      <div class="btn-grid">
+        <button class="btn success" id="btn-pick">⟳ PICK UP</button>
+        <button class="btn warn" id="btn-put">⬇ PUT DOWN</button>
+        <button class="btn" id="btn-scan">⌖ AUTO SCAN</button>
+        <button class="btn" id="btn-demo">▶ DEMO MODE</button>
+        <button class="btn success full" id="btn-navpick">⊕ NAV + PICK (AUTO)</button>
+        <button class="btn full" id="btn-parts">+ SPAWN NEW PARTS</button>
+        <button class="btn danger full" id="btn-reset">⟲ RESET ALL</button>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-title">DEBUG / DISPLAY</div>
+      <div class="btn-grid">
+        <button class="btn" id="btn-tcp-trail">〜 TCP TRAIL</button>
+        <button class="btn" id="btn-heatmap">◈ REACH MAP</button>
+      </div>
+    </div>
+
+    <!-- ── SCENARIO MODE ── -->
+    <div class="panel-section">
+      <div class="panel-title">SCENARIO MODE</div>
+      <div class="speed-selector">
+        <div class="speed-btn active" id="btn-normal-mode">NORMAL</div>
+        <div class="speed-btn" id="btn-stress-mode">STRESS</div>
+      </div>
+      <div style="margin-top:8px;font-size:9px;display:flex;gap:12px">
+        <span style="color:var(--muted)">GRASP P: <span id="stat-graspp" style="color:var(--accent3)">85%</span></span>
+        <span style="color:var(--muted)">NOISE: <span id="stat-noise" style="color:var(--accent)">LOW</span></span>
+        <span style="color:var(--muted)">DELAY λ: <span id="stat-lambda" style="color:var(--accent2)">3.0</span></span>
+      </div>
+    </div>
+
+    <!-- ── SIMULATION CONTROLS ── -->
+    <div class="panel-section">
+      <div class="panel-title">SIMULATION</div>
+      <div id="sim-status-badge" class="sim-badge stopped">● STOPPED</div>
+      <div class="btn-grid" style="margin-top:6px">
+        <button class="btn success" id="btn-auto-sim">▶ AUTO GATHER</button>
+        <button class="btn danger"  id="btn-stop-sim">⏹ STOP</button>
+        <button class="btn warn full" id="btn-monte-carlo">⚡ MONTE CARLO (100×)</button>
+      </div>
+    </div>
+
+    <!-- ── LIVE METRICS ── -->
+    <div class="panel-section">
+      <div class="panel-title">LIVE METRICS</div>
+      <div class="coord-row"><span class="coord-label">ATTEMPTS</span>     <span class="coord-val" id="m-attempts">0</span></div>
+      <div class="coord-row"><span class="coord-label">SUCCESSES</span>    <span class="coord-val" id="m-success" style="color:var(--accent3)">0</span></div>
+      <div class="coord-row"><span class="coord-label">FAILURES</span>     <span class="coord-val" id="m-fail" style="color:var(--danger)">0</span></div>
+      <div class="coord-row"><span class="coord-label">SUCCESS RATE</span> <span class="coord-val" id="m-rate">—</span></div>
+      <div class="coord-row"><span class="coord-label">AVG PICK TIME</span><span class="coord-val" id="m-avgtime">—</span></div>
+      <div class="coord-row"><span class="coord-label">THROUGHPUT</span>   <span class="coord-val" id="m-throughput">—</span></div>
+      <div class="coord-row"><span class="coord-label">COLLISIONS</span>   <span class="coord-val" id="m-collisions" style="color:var(--danger)">0</span></div>
+      <div class="coord-row"><span class="coord-label">ENERGY (Σ°)</span>  <span class="coord-val" id="m-energy" style="color:var(--accent2)">0</span></div>
+      <div class="coord-row"><span class="coord-label">GRASP QUALITY</span><span class="coord-val" id="m-quality" style="color:var(--accent3)">—</span></div>
+      <div class="quality-bar-wrap"><div class="quality-bar-fill" id="quality-bar" style="width:0%"></div></div>
+      <div class="coord-row" style="margin-top:4px"><span class="coord-label">FATIGUE</span><span class="coord-val" id="m-fatigue" style="color:var(--accent2)">0.0%</span></div>
+      <div class="fatigue-bar-wrap"><div class="fatigue-bar-fill" id="fatigue-bar" style="width:0%"></div></div>
+      <!-- Sparkline for success rate over time -->
+      <div style="margin-top:6px;font-size:8px;color:var(--muted);letter-spacing:1px">SUCCESS RATE HISTORY</div>
+      <canvas id="sparkline-canvas" height="36" style="width:100%;height:36px;margin-top:3px;border:1px solid var(--border)"></canvas>
+    </div>
+
+    <!-- ── MONTE CARLO RESULTS ── -->
+    <div class="panel-section" id="mc-results" style="display:none">
+      <div class="panel-title">MONTE CARLO RESULTS</div>
+      <div class="mc-compare-row">
+        <div class="mc-compare-cell">
+          <div class="label">NORMAL MODE</div>
+          <div class="val" id="mc-normal-mean" style="color:var(--accent3)">—</div>
+          <div style="font-size:8px;color:var(--muted)">μ success rate</div>
+          <div style="font-size:9px;color:var(--muted)">σ: <span id="mc-normal-std" style="color:var(--accent)">—</span></div>
+        </div>
+        <div class="mc-compare-cell">
+          <div class="label">STRESS MODE</div>
+          <div class="val" id="mc-stress-mean" style="color:var(--accent2)">—</div>
+          <div style="font-size:8px;color:var(--muted)">μ success rate</div>
+          <div style="font-size:9px;color:var(--muted)">σ: <span id="mc-stress-std" style="color:var(--accent)">—</span></div>
+        </div>
+      </div>
+      <div class="coord-row"><span class="coord-label">RUNS</span>             <span class="coord-val" id="mc-runs">100</span></div>
+      <div class="coord-row"><span class="coord-label">FAIL PROB (STRESS)</span><span class="coord-val" id="mc-failprob" style="color:var(--danger)">—</span></div>
+      <div class="coord-row"><span class="coord-label">95% CI (NORMAL)</span>  <span class="coord-val" id="mc-ci-normal">—</span></div>
+      <canvas id="mc-chart" height="80" style="width:100%;height:80px;margin-top:6px;border:1px solid var(--border);display:block"></canvas>
+      <div style="font-size:8px;color:var(--muted);margin-top:3px">■ <span style="color:var(--accent)">NORMAL</span> &nbsp; ■ <span style="color:var(--accent2)">STRESS</span> &nbsp;— histogram of success rates</div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-title">KEYBOARD</div>
+      <div class="key-hint"><div class="key">←</div><div class="key">→</div> Rotate base</div>
+      <div class="key-hint"><div class="key">↑</div><div class="key">↓</div> Shoulder pitch</div>
+      <div class="key-hint"><div class="key">W</div><div class="key">S</div> Elbow pitch</div>
+      <div class="key-hint"><div class="key">A</div><div class="key">D</div> Wrist roll</div>
+      <div class="key-hint"><div class="key">Q</div><div class="key">E</div> Wrist yaw</div>
+      <div class="key-hint"><div class="key">Z</div><div class="key">X</div> Wrist pitch</div>
+      <div class="key-hint"><div class="key">G</div> Pick &nbsp;<div class="key">P</div> Put down</div>
+      <div class="key-hint"><div class="key">R</div> Reset position</div>
+      <div class="key-hint"><div class="key">I</div><div class="key">K</div> Base fwd / back</div>
+      <div class="key-hint"><div class="key">J</div><div class="key">L</div> Base left / right</div>
+      <div class="key-hint"><div class="key">N</div> Nav + Auto-Pick</div>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ══════════════════════════════════════════════════════════════════
+//  SCENE SETUP
+// ══════════════════════════════════════════════════════════════════
+const wrap = document.getElementById('canvas-wrap');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x060a0f);
+scene.fog = new THREE.FogExp2(0x060a10, 0.04);
+
+const camera = new THREE.PerspectiveCamera(55, wrap.clientWidth / wrap.clientHeight, 0.01, 200);
+camera.position.set(2.2, 1.8, 2.2);
+camera.lookAt(0, 0.6, 0);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(wrap.clientWidth, wrap.clientHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputEncoding = THREE.sRGBEncoding;
+wrap.appendChild(renderer.domElement);
+
+// ══════════════════════════════════════════════════════════════════
+//  LIGHTING
+// ══════════════════════════════════════════════════════════════════
+scene.add(new THREE.AmbientLight(0x102030, 0.8));
+
+const sun = new THREE.DirectionalLight(0xffeedd, 1.0);
+sun.position.set(2, 5, 3);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.near = 0.1;
+sun.shadow.camera.far = 20;
+sun.shadow.camera.left = -5;
+sun.shadow.camera.right = 5;
+sun.shadow.camera.top = 5;
+sun.shadow.camera.bottom = -5;
+scene.add(sun);
+
+const fill = new THREE.DirectionalLight(0x3080ff, 0.4);
+fill.position.set(-3, 2, -2);
+scene.add(fill);
+
+const pt1 = new THREE.PointLight(0x00d4ff, 1.2, 8);
+pt1.position.set(0, 3, 0);
+pt1.castShadow = true;
+scene.add(pt1);
+
+const pt2 = new THREE.PointLight(0xff6b00, 0.8, 6);
+pt2.position.set(-2, 2, 2);
+scene.add(pt2);
+
+// ══════════════════════════════════════════════════════════════════
+//  MATERIALS
+// ══════════════════════════════════════════════════════════════════
+const M = {
+  floor:    new THREE.MeshStandardMaterial({ color:0x111820, roughness:0.9, metalness:0.1 }),
+  grid:     new THREE.MeshStandardMaterial({ color:0x00d4ff, roughness:0.5, metalness:0.5, emissive:0x00d4ff, emissiveIntensity:0.05 }),
+  wall:     new THREE.MeshStandardMaterial({ color:0x0d1a24, roughness:0.8, metalness:0.3 }),
+  base:     new THREE.MeshStandardMaterial({ color:0x1a2a3a, roughness:0.4, metalness:0.8 }),
+  arm:      new THREE.MeshStandardMaterial({ color:0x1e4060, roughness:0.3, metalness:0.9 }),
+  armLight: new THREE.MeshStandardMaterial({ color:0x2a5a80, roughness:0.3, metalness:0.9 }),
+  joint:    new THREE.MeshStandardMaterial({ color:0x0a1520, roughness:0.2, metalness:1.0 }),
+  accent:   new THREE.MeshStandardMaterial({ color:0x00d4ff, roughness:0.2, metalness:0.8, emissive:0x00d4ff, emissiveIntensity:0.3 }),
+  grip:     new THREE.MeshStandardMaterial({ color:0x1a3040, roughness:0.5, metalness:0.7 }),
+  gripTip:  new THREE.MeshStandardMaterial({ color:0xff6b00, roughness:0.3, metalness:0.8, emissive:0xff6b00, emissiveIntensity:0.2 }),
+  platform: new THREE.MeshStandardMaterial({ color:0x0d1a24, roughness:0.6, metalness:0.5 }),
+  wire:     new THREE.MeshStandardMaterial({ color:0x00ff88, roughness:0.8, metalness:0.1, emissive:0x00ff88, emissiveIntensity:0.15 }),
+  rail:     new THREE.MeshStandardMaterial({ color:0xffcc00, roughness:0.6, metalness:0.4, emissive:0xffcc00, emissiveIntensity:0.1 }),
+  conveyor: new THREE.MeshStandardMaterial({ color:0x0a1218, roughness:0.9, metalness:0.2 }),
+};
+
+// Stored group references (unused — no obstacles in scene)
+
+// ══════════════════════════════════════════════════════════════════
+//  ENVIRONMENT
+// ══════════════════════════════════════════════════════════════════
+function buildEnv() {
+  // Floor
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(12, 12), M.floor);
+  floor.rotation.x = -Math.PI / 2;
+  floor.receiveShadow = true;
+  scene.add(floor);
+
+  // Grid
+  const grid = new THREE.GridHelper(12, 24, 0x00d4ff, 0x1a3040);
+  grid.position.y = 0.002;
+  scene.add(grid);
+
+  // Safety lines
+  const yellow = new THREE.MeshStandardMaterial({ color:0xffcc00, roughness:0.9, emissive:0xffcc00, emissiveIntensity:0.2 });
+  [-2, 2].forEach(z => {
+    const l = new THREE.Mesh(new THREE.PlaneGeometry(12, 0.08), yellow);
+    l.rotation.x = -Math.PI / 2;
+    l.position.set(0, 0.003, z);
+    scene.add(l);
+  });
+  [-2, 2].forEach(x => {
+    const l = new THREE.Mesh(new THREE.PlaneGeometry(0.08, 12), yellow);
+    l.rotation.x = -Math.PI / 2;
+    l.position.set(x, 0.003, 0);
+    scene.add(l);
+  });
+
+  // Walls
+  const wallH = 4;
+  [
+    { pos:[0, wallH/2, -6], size:[12, wallH, 0.15] },
+    { pos:[-6, wallH/2, 0], size:[0.15, wallH, 12] },
+    { pos:[6, wallH/2, 0],  size:[0.15, wallH, 12] },
+  ].forEach(({ pos, size }) => {
+    const w = new THREE.Mesh(new THREE.BoxGeometry(...size), M.wall);
+    w.position.set(...pos);
+    w.receiveShadow = true;
+    scene.add(w);
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(size[0]*0.98, 0.04, 0.16), M.accent);
+    stripe.position.set(pos[0], 0.3, pos[2]);
+    scene.add(stripe);
+  });
+
+  // Ceiling light strips
+  [[-3,0],[3,0],[0,-3],[0,3]].forEach(([x,z]) => {
+    const strip = new THREE.Mesh(new THREE.BoxGeometry(0.1,0.05,2), new THREE.MeshStandardMaterial({
+      color:0xffffff, emissive:0xffeedd, emissiveIntensity:1.5
+    }));
+    strip.position.set(x, 3.9, z);
+    scene.add(strip);
+    const pl = new THREE.PointLight(0xffeedd, 0.6, 5);
+    pl.position.set(x, 3.5, z);
+    scene.add(pl);
+  });
+
+  // Robot platform
+  const plat = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.6, 0.06, 32), M.platform);
+  plat.position.y = 0.03;
+  plat.receiveShadow = true;
+  scene.add(plat);
+
+  // Platform accent ring
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.52, 0.015, 8, 48), M.accent);
+  ring.rotation.x = Math.PI / 2;
+  ring.position.y = 0.07;
+  scene.add(ring);
+
+  // ── COLLECTION / GATHER CIRCLE (where auto-sim deposits objects) ──
+  buildCollectionZone();
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  COLLECTION ZONE — visible target where auto-sim gathers objects
+// ══════════════════════════════════════════════════════════════════
+const COLLECTION_CENTER = new THREE.Vector3(-1.6, 0, 1.6);  // far-floor spot
+const COLLECTION_RADIUS = 0.42;                              // inside which we drop
+const COLLECTION_NAV_RADIUS = 0.55;                          // robot stops this far from center
+
+function buildCollectionZone() {
+  // Disc (glowing green)
+  const discMat = new THREE.MeshStandardMaterial({
+    color: 0x00ff88, roughness: 0.6, metalness: 0.2,
+    emissive: 0x00ff88, emissiveIntensity: 0.25,
+    transparent: true, opacity: 0.35
+  });
+  const disc = new THREE.Mesh(
+    new THREE.CircleGeometry(COLLECTION_RADIUS, 48),
+    discMat
+  );
+  disc.rotation.x = -Math.PI / 2;
+  disc.position.set(COLLECTION_CENTER.x, 0.004, COLLECTION_CENTER.z);
+  scene.add(disc);
+
+  // Outer ring
+  const ringMat = new THREE.MeshStandardMaterial({
+    color: 0x00ff88, emissive: 0x00ff88, emissiveIntensity: 0.9,
+    roughness: 0.3, metalness: 0.6
+  });
+  const outerRing = new THREE.Mesh(
+    new THREE.TorusGeometry(COLLECTION_RADIUS, 0.012, 10, 64),
+    ringMat
+  );
+  outerRing.rotation.x = Math.PI / 2;
+  outerRing.position.set(COLLECTION_CENTER.x, 0.015, COLLECTION_CENTER.z);
+  scene.add(outerRing);
+
+  // Dashed inner marker
+  const innerRing = new THREE.Mesh(
+    new THREE.TorusGeometry(COLLECTION_RADIUS * 0.5, 0.006, 6, 32),
+    ringMat
+  );
+  innerRing.rotation.x = Math.PI / 2;
+  innerRing.position.set(COLLECTION_CENTER.x, 0.012, COLLECTION_CENTER.z);
+  scene.add(innerRing);
+
+  // Tiny upward glow pole (just a dim vertical beacon for visibility)
+  const beacon = new THREE.PointLight(0x00ff88, 0.6, 2.5);
+  beacon.position.set(COLLECTION_CENTER.x, 0.5, COLLECTION_CENTER.z);
+  scene.add(beacon);
+
+  // Label text (using a small sprite disc)
+  const labelGeo = new THREE.RingGeometry(COLLECTION_RADIUS * 0.95, COLLECTION_RADIUS * 1.0, 48);
+  const labelMat = new THREE.MeshBasicMaterial({ color: 0x00ff88, transparent: true, opacity: 0.6 });
+  const labelRing = new THREE.Mesh(labelGeo, labelMat);
+  labelRing.rotation.x = -Math.PI / 2;
+  labelRing.position.set(COLLECTION_CENTER.x, 0.006, COLLECTION_CENTER.z);
+  scene.add(labelRing);
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  SEGMENT-SAMPLED ARM PROXIMITY DETECTION
+//  No obstacles in scene — proximity distance always returns Infinity,
+//  which safely no-ops adaptive speed and HUD.
+// ══════════════════════════════════════════════════════════════════
+
+const ARM_LINKS = [
+  ['shoulder',  'elbow'],
+  ['elbow',     'wristPitch'],
+  ['wristPitch','wristRoll'],
+  ['wristRoll', 'wristYaw'],
+  ['wristYaw',  'gripper'],
+];
+
+const LINK_SAMPLES = 6;
+const _lsA = new THREE.Vector3();
+const _lsB = new THREE.Vector3();
+const _lsP = new THREE.Vector3();
+
+// No obstacles — collision always clear
+function checkArmCollisions() { return false; }
+function checkCollisions()    { return false; }
+function getProximityDistance() { return Infinity; }
+
+// ══════════════════════════════════════════════════════════════════
+//  ROBOT ARM  (6-DOF)
+//  Hierarchy: robotBase → base(yaw) → shoulder → upperArm
+//             → elbow → foreArm → wristPitch → wristRoll
+//             → wristYaw → gripper → leftFinger, rightFinger
+// ══════════════════════════════════════════════════════════════════
+const arm = {};
+
+function buildArm() {
+  // Mobile robot base chassis
+  arm.robotBase = new THREE.Group();
+  arm.robotBase.position.set(0, 0, 0);
+  scene.add(arm.robotBase);
+
+  const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 0.06, 32), M.platform);
+  pad.position.y = 0.03;
+  pad.castShadow = true;
+  arm.robotBase.add(pad);
+
+  const padRing = new THREE.Mesh(new THREE.TorusGeometry(0.21, 0.012, 8, 48), M.accent);
+  padRing.rotation.x = Math.PI / 2;
+  padRing.position.y = 0.062;
+  arm.robotBase.add(padRing);
+
+  // Omni-wheels (visual)
+  const wheelMat = new THREE.MeshStandardMaterial({ color:0x0d1520, roughness:0.8, metalness:0.4 });
+  const hubMat   = new THREE.MeshStandardMaterial({ color:0x00d4ff, roughness:0.3, metalness:0.8, emissive:0x00d4ff, emissiveIntensity:0.25 });
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+    const wx = Math.cos(a) * 0.22;
+    const wz = Math.sin(a) * 0.22;
+    const wg = new THREE.Group();
+    wg.position.set(wx, 0.055, wz);
+    wg.rotation.y = a;
+    const tire = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 0.038, 16), wheelMat);
+    tire.rotation.x = Math.PI / 2;
+    wg.add(tire);
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.042, 8), hubMat);
+    hub.rotation.x = Math.PI / 2;
+    wg.add(hub);
+    arm.robotBase.add(wg);
+  }
+  arm.wheels = arm.robotBase.children.filter(c => c instanceof THREE.Group);
+
+  // Fixed base cylinder
+  const baseFixed = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 0.08, 24), M.base);
+  baseFixed.position.y = 0.1;
+  baseFixed.castShadow = true;
+  arm.robotBase.add(baseFixed);
+
+  // Rotating base (yaw joint)
+  arm.base = new THREE.Group();
+  arm.base.position.y = 0.14;
+  arm.robotBase.add(arm.base);
+
+  const turret = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 0.12, 24), M.base);
+  turret.position.y = 0.06;
+  turret.castShadow = true;
+  arm.base.add(turret);
+
+  const tAccent = new THREE.Mesh(new THREE.CylinderGeometry(0.105, 0.105, 0.02, 24), M.accent);
+  tAccent.position.y = 0.10;
+  arm.base.add(tAccent);
+
+  // Shoulder joint
+  arm.shoulder = new THREE.Group();
+  arm.shoulder.position.y = 0.14;
+  arm.base.add(arm.shoulder);
+
+  const shoulderJoint = new THREE.Mesh(new THREE.SphereGeometry(0.06, 20, 20), M.joint);
+  arm.shoulder.add(shoulderJoint);
+
+  // Upper arm link
+  arm.upperArmGroup = new THREE.Group();
+  arm.shoulder.add(arm.upperArmGroup);
+
+  const ua = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.28, 0.07), M.arm);
+  ua.position.y = 0.14;
+  ua.castShadow = true;
+  arm.upperArmGroup.add(ua);
+
+  const uaStripe = new THREE.Mesh(new THREE.BoxGeometry(0.072, 0.04, 0.074), M.accent);
+  uaStripe.position.y = 0.14;
+  arm.upperArmGroup.add(uaStripe);
+
+  const hyd = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.013, 0.22, 8), M.wire);
+  hyd.position.set(0.04, 0.11, 0.04);
+  hyd.rotation.z = 0.1;
+  arm.upperArmGroup.add(hyd);
+
+  // Elbow joint
+  arm.elbow = new THREE.Group();
+  arm.elbow.position.y = 0.28;
+  arm.upperArmGroup.add(arm.elbow);
+
+  const elbowJoint = new THREE.Mesh(new THREE.SphereGeometry(0.055, 20, 20), M.joint);
+  arm.elbow.add(elbowJoint);
+
+  const elbowRing = new THREE.Mesh(new THREE.TorusGeometry(0.055, 0.008, 8, 20), M.accent);
+  elbowRing.rotation.x = Math.PI / 2;
+  arm.elbow.add(elbowRing);
+
+  // Forearm link
+  arm.foreArmGroup = new THREE.Group();
+  arm.elbow.add(arm.foreArmGroup);
+
+  const fa = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.24, 0.06), M.armLight);
+  fa.position.y = 0.12;
+  fa.castShadow = true;
+  arm.foreArmGroup.add(fa);
+
+  const faStripe = new THREE.Mesh(new THREE.BoxGeometry(0.062, 0.035, 0.062), M.accent);
+  faStripe.position.y = 0.12;
+  arm.foreArmGroup.add(faStripe);
+
+  // Wrist pitch
+  arm.wristPitch = new THREE.Group();
+  arm.wristPitch.position.y = 0.24;
+  arm.foreArmGroup.add(arm.wristPitch);
+
+  const wpJoint = new THREE.Mesh(new THREE.SphereGeometry(0.044, 20, 20), M.joint);
+  arm.wristPitch.add(wpJoint);
+
+  // Wrist roll
+  arm.wristRoll = new THREE.Group();
+  arm.wristPitch.add(arm.wristRoll);
+
+  const wrBody = new THREE.Mesh(new THREE.CylinderGeometry(0.038, 0.038, 0.05, 20), M.arm);
+  arm.wristRoll.add(wrBody);
+
+  // Wrist yaw
+  arm.wristYaw = new THREE.Group();
+  arm.wristYaw.position.y = 0.05;
+  arm.wristRoll.add(arm.wristYaw);
+
+  const wyJoint = new THREE.Mesh(new THREE.SphereGeometry(0.034, 20, 20), M.joint);
+  arm.wristYaw.add(wyJoint);
+
+  // ── GRIPPER (end-effector) ──
+  // This is the attachment point for held objects.
+  arm.gripper = new THREE.Group();
+  arm.gripper.position.y = 0.04;
+  arm.wristYaw.add(arm.gripper);
+
+  const gbody = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.04, 0.035), M.grip);
+  gbody.castShadow = true;
+  arm.gripper.add(gbody);
+
+  // TCP indicator light (green dot at tip)
+  const tcpLight = new THREE.Mesh(new THREE.SphereGeometry(0.008, 8, 8),
+    new THREE.MeshStandardMaterial({ color:0x00ff88, emissive:0x00ff88, emissiveIntensity:2 }));
+  tcpLight.position.y = 0.025;
+  arm.gripper.add(tcpLight);
+
+  // ── BONUS: Visual fingers that close during grasp ──
+  arm.leftFinger  = new THREE.Group();
+  arm.rightFinger = new THREE.Group();
+  arm.gripper.add(arm.leftFinger);
+  arm.gripper.add(arm.rightFinger);
+
+  function makeFinger() {
+    const fg = new THREE.Group();
+    // Palm segment
+    const palm = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.07, 0.018), M.grip);
+    palm.position.y = -0.035;
+    palm.castShadow = true;
+    fg.add(palm);
+    // Fingertip (orange sensor tip)
+    const tip = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.025, 0.030), M.gripTip);
+    tip.position.set(0, -0.082, 0.006);
+    tip.castShadow = true;
+    fg.add(tip);
+    // Knuckle sphere
+    const k = new THREE.Mesh(new THREE.SphereGeometry(0.008, 8, 8), M.joint);
+    fg.add(k);
+    return fg;
+  }
+
+  const lf = makeFinger();
+  lf.position.set(-0.022, 0, 0);
+  arm.leftFinger.add(lf);
+
+  const rf = makeFinger();
+  rf.position.set(0.022, 0, 0);
+  arm.rightFinger.add(rf);
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  JOINT STATE
+// ══════════════════════════════════════════════════════════════════
+const current = {
+  base: 0, shoulder: 0, elbow: 0,
+  wristPitch: 0, wristRoll: 0, wristYaw: 0,
+  gripper: 0.5
+};
+
+let speedMult = 1.0;
+let animFrame = null;
+let isMoving  = false;
+
+// Used by collision revert — stores last safe joint state
+let _safeJoints = { ...current };
+
+function applyJoints() {
+  arm.base.rotation.y          = THREE.MathUtils.degToRad(current.base);
+  arm.upperArmGroup.rotation.x = THREE.MathUtils.degToRad(current.shoulder);
+  arm.foreArmGroup.rotation.x  = THREE.MathUtils.degToRad(current.elbow);
+  arm.wristPitch.rotation.x    = THREE.MathUtils.degToRad(current.wristPitch);
+  arm.wristRoll.rotation.z     = THREE.MathUtils.degToRad(current.wristRoll);
+  arm.wristYaw.rotation.y      = THREE.MathUtils.degToRad(current.wristYaw);
+
+  // BONUS: Fingers open/close based on gripper value (0=closed, 1=open)
+  const g = current.gripper;
+  arm.leftFinger.rotation.z  =  g * 0.55;
+  arm.rightFinger.rotation.z = -g * 0.55;
+
+  updateHUD();
+}
+
+function animateTo(target, duration = 800, onDone) {
+  if (animFrame) cancelAnimationFrame(animFrame);
+  isMoving = true;
+  setMotionIndicator(true);
+
+  const start = { ...current };
+  const startTime = performance.now();
+  const dur = duration / speedMult;
+
+  function tick() {
+    const t = Math.min((performance.now() - startTime) / dur, 1);
+    const e = t < 0.5 ? 2*t*t : 1 - Math.pow(-2*t+2, 2) / 2; // ease-in-out
+
+    for (const k in target) {
+      if (k in current) current[k] = start[k] + (target[k] - start[k]) * e;
+    }
+
+    applyJoints();
+    syncSliders();
+
+    if (t < 1) {
+      animFrame = requestAnimationFrame(tick);
+    } else {
+      isMoving = false;
+      setMotionIndicator(false);
+      if (onDone) onDone();
+    }
+  }
+  animFrame = requestAnimationFrame(tick);
+}
+
+function setMotionIndicator(on) {
+  const dot = document.getElementById('motion-dot');
+  const lbl = document.getElementById('motion-label');
+  if (on) {
+    dot.style.background = '#00d4ff';
+    dot.style.boxShadow  = '0 0 8px #00d4ff';
+    lbl.textContent = 'MOVING';
+  } else {
+    dot.style.background = '#2a5a7c';
+    dot.style.boxShadow  = 'none';
+    lbl.textContent = 'IDLE';
+  }
+}
+
+function syncSliders() {
+  document.getElementById('sl-base').value     = current.base;
+  document.getElementById('sl-shoulder').value = current.shoulder;
+  document.getElementById('sl-elbow').value    = current.elbow;
+  document.getElementById('sl-wristp').value   = current.wristPitch;
+  document.getElementById('sl-wristr').value   = current.wristRoll;
+  document.getElementById('sl-wristy').value   = current.wristYaw;
+  document.getElementById('sl-grip').value     = current.gripper * 100;
+
+  document.getElementById('v-base').textContent     = Math.round(current.base) + '°';
+  document.getElementById('v-shoulder').textContent = Math.round(current.shoulder) + '°';
+  document.getElementById('v-elbow').textContent    = Math.round(current.elbow) + '°';
+  document.getElementById('v-wristp').textContent   = Math.round(current.wristPitch) + '°';
+  document.getElementById('v-wristr').textContent   = Math.round(current.wristRoll) + '°';
+  document.getElementById('v-wristy').textContent   = Math.round(current.wristYaw) + '°';
+  document.getElementById('v-grip').textContent     = Math.round(current.gripper * 100) + '%';
+  document.getElementById('grip-fill').style.width  = (current.gripper * 100) + '%';
+}
+
+function updateHUD() {
+  document.getElementById('h-base').textContent     = Math.round(current.base) + '°';
+  document.getElementById('h-shoulder').textContent = Math.round(current.shoulder) + '°';
+  document.getElementById('h-elbow').textContent    = Math.round(current.elbow) + '°';
+  document.getElementById('h-wristp').textContent   = Math.round(current.wristPitch) + '°';
+  document.getElementById('h-wristr').textContent   = Math.round(current.wristRoll) + '°';
+  document.getElementById('h-wristy').textContent   = Math.round(current.wristYaw) + '°';
+  document.getElementById('h-grip').textContent     = Math.round(current.gripper * 100) + '%';
+  document.getElementById('h-speed').textContent    = ['SLOW','NORMAL','FAST','MAX'][[0.3,1,2.5,5].indexOf(speedMult)] || speedMult + 'x';
+  if (arm.robotBase) {
+    document.getElementById('h-bx').textContent = arm.robotBase.position.x.toFixed(2);
+    document.getElementById('h-bz').textContent = arm.robotBase.position.z.toFixed(2);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  TARGET OBJECTS
+// ══════════════════════════════════════════════════════════════════
+const COLORS = [0xff4455, 0x00d4ff, 0xffcc00, 0x00ff88, 0xff6b00, 0xbb44ff, 0xffffff];
+let objects = [];
+let heldObj = null;
+
+function spawnObjects(count = 22) {
+  objects.forEach(o => scene.remove(o));
+  objects = [];
+
+  const types = ['box','cyl','sphere','cone'];
+  for (let i = 0; i < count; i++) {
+    const t = types[i % types.length];
+    const c = COLORS[i % COLORS.length];
+    let geo;
+    if (t === 'box')    geo = new THREE.BoxGeometry(0.10 + Math.random()*0.06, 0.07 + Math.random()*0.08, 0.10 + Math.random()*0.06);
+    if (t === 'cyl')    geo = new THREE.CylinderGeometry(0.05, 0.05, 0.12, 16);
+    if (t === 'sphere') geo = new THREE.SphereGeometry(0.06, 16, 16);
+    if (t === 'cone')   geo = new THREE.CylinderGeometry(0.02, 0.07, 0.12, 12);
+
+    const mat = new THREE.MeshStandardMaterial({
+      color: c, roughness: 0.4, metalness: 0.5,
+      emissive: c, emissiveIntensity: 0.05
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+
+    // Position on floor, clear of the bench/conveyor area AND the collection circle
+    let px, pz, tries = 0;
+    do {
+      px = (Math.random() - 0.5) * 4.0;
+      pz = (Math.random() - 0.5) * 3.5;
+      tries++;
+    } while (
+      tries < 40 && (
+        (Math.abs(px - 1.5) < 0.9 && Math.abs(pz + 2.5) < 0.6) || // old bench avoidance
+        (Math.hypot(px - COLLECTION_CENTER.x, pz - COLLECTION_CENTER.z) < COLLECTION_RADIUS + 0.2) // not in drop zone
+      )
+    );
+
+    // Set Y so object sits on floor (center at half its height)
+    const tempBox = new THREE.Box3().setFromObject(mesh); // mesh not in scene yet
+    const sz = tempBox.getSize(new THREE.Vector3());
+    mesh.position.set(px, sz.y / 2, pz);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    mesh.userData.isTarget = true;
+
+    scene.add(mesh);
+    objects.push(mesh);
+  }
+  document.getElementById('obj-count').textContent = objects.length + ' OBJECTS';
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  IK SOLVER — 2-link analytical + base yaw, mobile-base-aware
+// ══════════════════════════════════════════════════════════════════
+const L1 = 0.28; // upper arm length
+const L2 = 0.24; // forearm length
+
+function solveIK(worldTarget) {
+  const rbPos = arm.robotBase.position;
+
+  const dx = worldTarget.x - rbPos.x;
+  const dy = worldTarget.y - (rbPos.y + 0.28); // 0.14 (arm.base.y) + 0.14 (shoulder.y)
+  const dz = worldTarget.z - rbPos.z;
+
+  const baseRot = Math.atan2(dx, dz) * 180 / Math.PI;
+
+  const r    = Math.sqrt(dx*dx + dz*dz);
+  const dist = Math.sqrt(r*r + dy*dy);
+
+  // Clamp to 95% of max reach to avoid gimbal at full extension
+  const maxReach = (L1 + L2) * 0.95;
+  const d = Math.min(dist, maxReach);
+
+  const alphaAngle  = Math.atan2(dy, r);
+  const cosElbow    = (L1*L1 + L2*L2 - d*d) / (2*L1*L2);
+  const clampedCos  = Math.max(-1, Math.min(1, cosElbow));
+  const elbowAngle  = Math.acos(clampedCos);
+
+  const cosShoulder = (L1*L1 + d*d - L2*L2) / (2*L1*d);
+  const betaAngle   = Math.acos(Math.max(-1, Math.min(1, cosShoulder)));
+
+  const shoulderRad = alphaAngle + betaAngle;
+  const elbowRad    = Math.PI - elbowAngle;
+
+  // Keep wrist level (end-effector horizontal)
+  const wristPitch = -(shoulderRad + elbowRad - Math.PI / 2) * 180 / Math.PI;
+
+  return {
+    base:       baseRot,
+    shoulder:   shoulderRad * 180 / Math.PI,
+    elbow:      elbowRad    * 180 / Math.PI,
+    wristPitch: wristPitch,
+  };
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  PROBLEM 5 FIX: updateIK — clean named wrapper for IK + animate
+// ══════════════════════════════════════════════════════════════════
+function updateIK(worldTarget, jointOverrides, duration, onDone) {
+  const ik = solveIK(worldTarget);
+  if (!ik) { if (onDone) onDone(); return; }
+  animateTo({ ...ik, ...jointOverrides }, duration, onDone);
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  BASE NAVIGATION
+// ══════════════════════════════════════════════════════════════════
+let baseMoving = false;
+
+function animateBaseTo(targetPos, duration, onDone) {
+  const start = arm.robotBase.position.clone();
+  const startTime = performance.now();
+  baseMoving = true;
+
+  function tickBase() {
+    const elapsed = performance.now() - startTime;
+    const rawT = Math.min(elapsed / (duration / speedMult), 1);
+    const e = rawT < 0.5 ? 2*rawT*rawT : 1 - Math.pow(-2*rawT+2, 2) / 2;
+
+    arm.robotBase.position.lerpVectors(start, targetPos, e);
+    if (arm.wheels) {
+      arm.wheels.forEach(w => { if (w.children[0]) w.children[0].rotation.y += e * 0.12; });
+    }
+    updateCamera();
+
+    if (rawT < 1) {
+      requestAnimationFrame(tickBase);
+    } else {
+      arm.robotBase.position.copy(targetPos);
+      baseMoving = false;
+      if (onDone) onDone();
+    }
+  }
+  requestAnimationFrame(tickBase);
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  PROBLEM 4 FIX: Proximity-based object selection
+// ══════════════════════════════════════════════════════════════════
+function getGripperWorldPos() {
+  arm.gripper.updateWorldMatrix(true, false);
+  const pos = new THREE.Vector3();
+  arm.gripper.getWorldPosition(pos);
+  return pos;
+}
+
+function getClosestObject() {
+  let closest = null;
+  let minD = Infinity;
+  const gripPos = getGripperWorldPos();
+
+  objects.forEach(o => {
+    const d = o.position.distanceTo(gripPos);
+    if (d < minD) { minD = d; closest = o; }
+  });
+  // Threshold = 0.55 m to absorb IK approximation error
+  return minD < 0.55 ? closest : null;
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  PROBLEM 1 FIX: pickObject() — correct snap + attachment
+//  Object is snapped to gripper tip BEFORE arm.gripper.attach().
+//  This prevents sinking into ground or wrong-offset bugs.
+// ══════════════════════════════════════════════════════════════════
+function pickObject(obj) {
+  // 1. Get true gripper world position after arm has settled
+  arm.gripper.updateWorldMatrix(true, false);
+  const gripWorldPos = new THREE.Vector3();
+  arm.gripper.getWorldPosition(gripWorldPos);
+
+  // 2. Compute object bounding box (world space, obj is still a scene child)
+  const box  = new THREE.Box3().setFromObject(obj);
+  const size = box.getSize(new THREE.Vector3());
+
+  // 3. Snap object so its TOP aligns with the gripper tip:
+  //    object center Y = gripper Y - (size.y / 2)
+  //    Clamp so object never penetrates the floor (bottom must be >= 0)
+  const snapY = Math.max(size.y / 2 + 0.001, gripWorldPos.y - size.y / 2);
+
+  // Set object world position — it's a scene child so position IS world position
+  obj.position.set(gripWorldPos.x, snapY, gripWorldPos.z);
+
+  // 4. Attach to END EFFECTOR (arm.gripper).
+  //    Three.js attach() re-parents the object while preserving its world transform.
+  //    obj.position and obj.rotation are automatically converted to gripper-local space.
+  arm.gripper.attach(obj);
+
+  // 5. Bookkeeping
+  heldObj = obj;
+  const idx = objects.indexOf(obj);
+  if (idx >= 0) objects.splice(idx, 1);
+
+  document.getElementById('h-hold').textContent = 'HOLDING';
+  document.getElementById('obj-count').textContent = objects.length + ' OBJECTS';
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  PROBLEM 1 FIX: releaseObject() — clean detach with floor clamp
+// ══════════════════════════════════════════════════════════════════
+function releaseObject(placePos) {
+  if (!heldObj) return;
+
+  // scene.attach() re-parents back to world while keeping world transform intact
+  scene.attach(heldObj);
+
+  if (placePos) {
+    // Compute size so the object bottom rests exactly on the floor
+    const box  = new THREE.Box3().setFromObject(heldObj);
+    const size = box.getSize(new THREE.Vector3());
+    heldObj.position.set(
+      placePos.x,
+      Math.max(size.y / 2, placePos.y),
+      placePos.z
+    );
+  }
+  // Reset rotation so object sits flat
+  heldObj.rotation.set(0, 0, 0);
+
+  objects.push(heldObj);
+  heldObj = null;
+
+  document.getElementById('h-hold').textContent = 'NONE';
+  document.getElementById('obj-count').textContent = objects.length + ' OBJECTS';
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  PROBLEM 4 FIX: pickUp() — arm moves BEFORE attaching, no teleport.
+//  Phases:
+//   1) Approach above object (gripper open)
+//   2) Descend to pick height
+//   3) Close fingers
+//   4) Snap + attach (pickObject)
+//   5) Lift clear
+// ══════════════════════════════════════════════════════════════════
+function pickUp() {
+  if (heldObj || isMoving) return;
+  const obj = getClosestObject();
+  if (!obj) { toast('NO TARGET IN RANGE'); return; }
+
+  // Positions used for IK
+  const objPos   = obj.position.clone();
+  const abovePos = objPos.clone().add(new THREE.Vector3(0, 0.30, 0)); // hover point
+  const pickPos  = objPos.clone().add(new THREE.Vector3(0, 0.05, 0)); // grasp point
+
+  const ikAbove = solveIK(abovePos);
+  const ikPick  = solveIK(pickPos);
+
+  if (!ikAbove || !ikPick) { toast('OUT OF REACH'); return; }
+
+  toast('APPROACHING TARGET');
+
+  // Phase 1: Move above object with gripper open
+  const overrides = { wristRoll: current.wristRoll, wristYaw: current.wristYaw };
+  animateTo({ ...ikAbove, gripper: 1.0, ...overrides }, 900, () => {
+
+    // Phase 2: Descend to pick position
+    animateTo({ ...ikPick, gripper: 1.0, ...overrides }, 600, () => {
+
+      // Phase 3: Close fingers
+      animateTo({ ...current, gripper: 0.08 }, 400, () => {
+
+        // Phase 4: SNAP object to gripper tip + attach to end-effector
+        pickObject(obj);
+
+        toast('OBJECT SECURED');
+
+        // Phase 5: Lift clear (object rides along in gripper scene graph)
+        animateTo({ ...ikAbove, gripper: 0.08, ...overrides }, 650);
+      });
+    });
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  putDown() — place object cleanly on floor
+// ══════════════════════════════════════════════════════════════════
+function putDown() {
+  if (!heldObj || isMoving) return;
+
+  const baseRad  = current.base * Math.PI / 180;
+  const rbPos    = arm.robotBase.position;
+  const placePos = new THREE.Vector3(
+    rbPos.x + Math.sin(baseRad) * 0.40,
+    0.08,
+    rbPos.z + Math.cos(baseRad) * 0.40
+  );
+  const abovePos = placePos.clone().add(new THREE.Vector3(0, 0.28, 0));
+
+  const ikAbove = solveIK(abovePos);
+  const ikPlace = solveIK(placePos);
+
+  if (!ikAbove || !ikPlace) { toast('OUT OF REACH'); return; }
+
+  toast('PLACING OBJECT');
+
+  const overrides = { wristRoll: current.wristRoll, wristYaw: current.wristYaw };
+
+  animateTo({ ...ikAbove, gripper: 0.08, ...overrides }, 800, () => {
+    animateTo({ ...ikPlace, gripper: 0.08, ...overrides }, 600, () => {
+      // Open fingers to release
+      animateTo({ ...current, gripper: 0.85 }, 400, () => {
+        releaseObject(placePos);
+        toast('OBJECT PLACED');
+        // Lift away
+        animateTo({ ...ikAbove, gripper: 0.85, ...overrides }, 600);
+      });
+    });
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  AUTO-NAVIGATE + PICK
+// ══════════════════════════════════════════════════════════════════
+function navigateAndPick() {
+  if (baseMoving || isMoving) { toast('SYSTEM BUSY'); return; }
+  if (heldObj) { toast('PUT DOWN FIRST'); return; }
+  if (objects.length === 0) { toast('NO OBJECTS TO PICK'); return; }
+
+  const rbPos = arm.robotBase.position;
+  let closest = null, minD = Infinity;
+  objects.forEach(o => {
+    const dx = o.position.x - rbPos.x;
+    const dz = o.position.z - rbPos.z;
+    const d  = Math.sqrt(dx*dx + dz*dz);
+    if (d < minD) { minD = d; closest = o; }
+  });
+  if (!closest) return;
+
+  const objPos = closest.position.clone();
+  const dir    = new THREE.Vector3(objPos.x - rbPos.x, 0, objPos.z - rbPos.z);
+  const dist   = dir.length();
+
+  const APPROACH_DIST = 0.36;
+  if (dist < APPROACH_DIST + 0.05) {
+    toast('IN RANGE — PICKING');
+    setTimeout(() => pickUp(), 100);
+    return;
+  }
+
+  dir.normalize();
+  const navDist   = dist - APPROACH_DIST;
+  const targetPos = new THREE.Vector3(
+    rbPos.x + dir.x * navDist,
+    0,
+    rbPos.z + dir.z * navDist
+  );
+
+  toast('NAVIGATING TO TARGET');
+  animateBaseTo(targetPos, 1400, () => {
+    toast('POSITIONING ARM…');
+    setTimeout(() => pickUp(), 250);
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  AUTO SCAN
+// ══════════════════════════════════════════════════════════════════
+function autoScan() {
+  if (isMoving) return;
+  toast('SCANNING WORKSPACE');
+  const frames = [
+    { base:-90, shoulder:30, elbow:20, wristPitch:-20, wristRoll:0, wristYaw:0, gripper:1 },
+    { base:0,   shoulder:40, elbow:40, wristPitch:-30, wristRoll:0, wristYaw:0, gripper:1 },
+    { base:90,  shoulder:30, elbow:20, wristPitch:-20, wristRoll:0, wristYaw:0, gripper:1 },
+    { base:45,  shoulder:20, elbow:60, wristPitch:-40, wristRoll:90, wristYaw:30, gripper:1 },
+    { base:0,   shoulder:0,  elbow:0,  wristPitch:0,   wristRoll:0, wristYaw:0,  gripper:0.5 },
+  ];
+  let idx = 0;
+  function next() {
+    if (idx >= frames.length) { toast('SCAN COMPLETE'); return; }
+    animateTo(frames[idx++], 900, next);
+  }
+  next();
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  DEMO MODE
+// ══════════════════════════════════════════════════════════════════
+let demoActive = false;
+function demoMode() {
+  demoActive = !demoActive;
+  document.getElementById('btn-demo').textContent = demoActive ? '⏹ STOP DEMO' : '▶ DEMO MODE';
+  if (demoActive) runDemo();
+}
+
+function runDemo() {
+  if (!demoActive) return;
+  const seq = [{
+    base: Math.random()*180-90, shoulder: 20+Math.random()*60,
+    elbow: 20+Math.random()*80, wristPitch: -20+Math.random()*40,
+    wristRoll: Math.random()*180-90, wristYaw: Math.random()*90-45,
+    gripper: Math.random()
+  }];
+  animateTo(seq[0], 1200 + Math.random()*600, () => {
+    if (demoActive) setTimeout(runDemo, 200);
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  PRESETS + WAVE
+// ══════════════════════════════════════════════════════════════════
+function waveMotion() {
+  const frames = [
+    { base:0, shoulder:60, elbow:0, wristPitch:0, wristRoll:0, wristYaw:30,  gripper:1 },
+    { base:0, shoulder:60, elbow:0, wristPitch:0, wristRoll:0, wristYaw:-30, gripper:1 },
+    { base:0, shoulder:60, elbow:0, wristPitch:0, wristRoll:0, wristYaw:30,  gripper:1 },
+    { base:0, shoulder:60, elbow:0, wristPitch:0, wristRoll:0, wristYaw:-30, gripper:1 },
+    { base:0, shoulder:0,  elbow:0, wristPitch:0, wristRoll:0, wristYaw:0,   gripper:0.5 },
+  ];
+  let i = 0;
+  function next() { if (i < frames.length) animateTo(frames[i++], 350, next); }
+  next();
+}
+
+function resetArm() {
+  demoActive = false;
+  document.getElementById('btn-demo').textContent = '▶ DEMO MODE';
+  animateTo({ base:0, shoulder:0, elbow:0, wristPitch:0, wristRoll:0, wristYaw:0, gripper:0.5 }, 800);
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  ORBIT CAMERA
+// ══════════════════════════════════════════════════════════════════
+let camR = 3.0, camTheta = Math.PI/4, camPhi = Math.PI/4;
+let isDragging = false, lastMouse = {x:0, y:0};
+
+const canvasEl = renderer.domElement;
+canvasEl.addEventListener('mousedown', e => {
+  isDragging = true;
+  lastMouse = { x: e.clientX, y: e.clientY };
+});
+window.addEventListener('mouseup', () => isDragging = false);
+window.addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  camTheta -= (e.clientX - lastMouse.x) * 0.008;
+  camPhi = Math.max(0.1, Math.min(Math.PI*0.48, camPhi + (e.clientY - lastMouse.y) * 0.006));
+  lastMouse = { x: e.clientX, y: e.clientY };
+  updateCamera();
+});
+canvasEl.addEventListener('wheel', e => {
+  camR = Math.max(0.8, Math.min(7, camR + e.deltaY * 0.003));
+  document.getElementById('h-cam').textContent = camR.toFixed(1);
+  updateCamera();
+}, { passive: true });
+
+canvasEl.addEventListener('touchstart', e => {
+  isDragging = true;
+  lastMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+});
+window.addEventListener('touchend', () => isDragging = false);
+window.addEventListener('touchmove', e => {
+  if (!isDragging) return;
+  camTheta -= (e.touches[0].clientX - lastMouse.x) * 0.01;
+  camPhi = Math.max(0.1, Math.min(Math.PI*0.48, camPhi + (e.touches[0].clientY - lastMouse.y) * 0.008));
+  lastMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  updateCamera();
+});
+
+function updateCamera() {
+  const cx = arm.robotBase ? arm.robotBase.position.x : 0;
+  const cz = arm.robotBase ? arm.robotBase.position.z : 0;
+  camera.position.set(
+    cx + camR * Math.sin(camPhi) * Math.sin(camTheta),
+    camR * Math.cos(camPhi) + 0.4,
+    cz + camR * Math.sin(camPhi) * Math.cos(camTheta)
+  );
+  camera.lookAt(cx, 0.6, cz);
+}
+
+// Floor click → drive base
+const raycaster = new THREE.Raycaster();
+const mouse2d   = new THREE.Vector2();
+canvasEl.addEventListener('click', e => {
+  if (Math.abs(e.clientX - lastMouse.x) > 5) return;
+  if (baseMoving || isMoving) return;
+  mouse2d.x =  (e.clientX / wrap.clientWidth)  * 2 - 1;
+  mouse2d.y = -(e.clientY / wrap.clientHeight) * 2 + 1;
+  raycaster.setFromCamera(mouse2d, camera);
+  const hits = raycaster.intersectObjects(
+    scene.children.filter(c => c.geometry && c.geometry.type === 'PlaneGeometry')
+  );
+  if (hits.length > 0) {
+    const pt = hits[0].point;
+    const targetPos = new THREE.Vector3(
+      Math.max(-5.2, Math.min(5.2, pt.x)),
+      0,
+      Math.max(-5.2, Math.min(5.2, pt.z))
+    );
+    animateBaseTo(targetPos, 900);
+    toast('BASE DRIVING TO POSITION');
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════
+//  SLIDER CONTROLS
+// ══════════════════════════════════════════════════════════════════
+function bindSlider(id, key, mul = 1) {
+  document.getElementById(id).addEventListener('input', e => {
+    current[key] = parseFloat(e.target.value) * mul;
+    applyJoints();
+    syncSliders();
+  });
+}
+bindSlider('sl-base',     'base');
+bindSlider('sl-shoulder', 'shoulder');
+bindSlider('sl-elbow',    'elbow');
+bindSlider('sl-wristp',   'wristPitch');
+bindSlider('sl-wristr',   'wristRoll');
+bindSlider('sl-wristy',   'wristYaw');
+bindSlider('sl-grip',     'gripper', 0.01);
+
+// ══════════════════════════════════════════════════════════════════
+//  KEYBOARD
+// ══════════════════════════════════════════════════════════════════
+const keys = {};
+const STEP = 1.2;
+document.addEventListener('keydown', e => { keys[e.key] = true; });
+document.addEventListener('keyup',   e => { keys[e.key] = false; });
+
+function processKeys() {
+  let changed = false;
+
+  // ── v7: Proximity-adaptive speed — arm slows near obstacles ──
+  const proxDist = getProximityDistance();
+  let proxFactor = 1.0;
+  if      (proxDist < 0.08) proxFactor = 0.15;
+  else if (proxDist < 0.20) proxFactor = 0.40;
+  else if (proxDist < 0.40) proxFactor = 0.70;
+
+  const s = STEP * speedMult * proxFactor;
+  if (keys['ArrowLeft'])  { current.base      -= s; changed = true; }
+  if (keys['ArrowRight']) { current.base      += s; changed = true; }
+  if (keys['ArrowUp'])    { current.shoulder  -= s; changed = true; }
+  if (keys['ArrowDown'])  { current.shoulder  += s; changed = true; }
+  if (keys['w'] || keys['W']) { current.elbow      -= s; changed = true; }
+  if (keys['s'] || keys['S']) { current.elbow      += s; changed = true; }
+  if (keys['a'] || keys['A']) { current.wristRoll  -= s; changed = true; }
+  if (keys['d'] || keys['D']) { current.wristRoll  += s; changed = true; }
+  if (keys['q'] || keys['Q']) { current.wristYaw   -= s; changed = true; }
+  if (keys['e'] || keys['E']) { current.wristYaw   += s; changed = true; }
+  if (keys['z'] || keys['Z']) { current.wristPitch -= s; changed = true; }
+  if (keys['x'] || keys['X']) { current.wristPitch += s; changed = true; }
+
+  // Clamp joint limits
+  current.base       = Math.max(-180, Math.min(180, current.base));
+  current.shoulder   = Math.max(-120, Math.min(120, current.shoulder));
+  current.elbow      = Math.max(-150, Math.min(150, current.elbow));
+  current.wristPitch = Math.max(-120, Math.min(120, current.wristPitch));
+  current.wristRoll  = Math.max(-180, Math.min(180, current.wristRoll));
+  current.wristYaw   = Math.max(-90,  Math.min(90,  current.wristYaw));
+
+  if (changed) {
+    applyJoints();
+    syncSliders();
+  }
+
+  // ── BASE MOBILITY (IJKL) ──
+  const BASE_STEP = 0.022 * speedMult;
+  let baseMoved = false;
+  if (keys['i'] || keys['I']) { arm.robotBase.position.z -= BASE_STEP; baseMoved = true; }
+  if (keys['k'] || keys['K']) { arm.robotBase.position.z += BASE_STEP; baseMoved = true; }
+  if (keys['j'] || keys['J']) { arm.robotBase.position.x -= BASE_STEP; baseMoved = true; }
+  if (keys['l'] || keys['L']) { arm.robotBase.position.x += BASE_STEP; baseMoved = true; }
+
+  arm.robotBase.position.x = Math.max(-5.2, Math.min(5.2, arm.robotBase.position.x));
+  arm.robotBase.position.z = Math.max(-5.2, Math.min(5.2, arm.robotBase.position.z));
+
+  if (baseMoved) {
+    if (arm.wheels) arm.wheels.forEach(w => { if (w.children[0]) w.children[0].rotation.y += 0.12; });
+    updateCamera();
+  }
+
+  // ── v7: Energy tracking ──
+  trackEnergy();
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  v7 INNOVATIONS: ENERGY TRACKER, TCP TRAIL, GRASP QUALITY,
+//                  WORKSPACE HEATMAP, GLTF EXPORT
+// ══════════════════════════════════════════════════════════════════
+
+// ── Energy tracking — accumulates total joint displacement (degrees) ──
+let totalEnergy = 0;
+let _prevJoints = { base:0, shoulder:0, elbow:0, wristPitch:0, wristRoll:0, wristYaw:0 };
+
+function trackEnergy() {
+  let delta = 0;
+  for (const k of ['base','shoulder','elbow','wristPitch','wristRoll','wristYaw']) {
+    delta += Math.abs(current[k] - _prevJoints[k]);
+    _prevJoints[k] = current[k];
+  }
+  totalEnergy += delta;
+}
+
+// ── TCP Trail — glowing line showing gripper path history ──
+let tcpTrailPts = [];
+const MAX_TRAIL = 300;
+let tcpLine     = null;
+let trailActive = false;
+
+function updateTCPTrail() {
+  if (!trailActive || !arm.gripper) return;
+  const pos = new THREE.Vector3();
+  arm.gripper.updateWorldMatrix(true, false);
+  arm.gripper.getWorldPosition(pos);
+  tcpTrailPts.push(pos.clone());
+  if (tcpTrailPts.length > MAX_TRAIL) tcpTrailPts.shift();
+  if (tcpLine) scene.remove(tcpLine);
+  if (tcpTrailPts.length < 2) return;
+  const geo = new THREE.BufferGeometry().setFromPoints(tcpTrailPts);
+  const mat = new THREE.LineBasicMaterial({ color:0x00ff88, transparent:true, opacity:0.55 });
+  tcpLine = new THREE.Line(geo, mat);
+  scene.add(tcpLine);
+}
+
+function toggleTCPTrail() {
+  trailActive = !trailActive;
+  if (!trailActive) {
+    if (tcpLine) { scene.remove(tcpLine); tcpLine = null; }
+    tcpTrailPts = [];
+  }
+  document.getElementById('btn-tcp-trail').textContent = trailActive ? '〜 TRAIL: ON' : '〜 TCP TRAIL';
+  toast(trailActive ? 'TCP TRAIL ON — GRIPPER PATH RECORDED' : 'TCP TRAIL CLEARED');
+}
+
+// ── Grasp Quality Score ──
+// Returns 0–100 based on: gripper–target distance (60%) + gripper downward alignment (40%)
+function getGraspQuality() {
+  if (!objects.length || !arm.gripper) return -1;
+  const gripPos = new THREE.Vector3();
+  arm.gripper.updateWorldMatrix(true, false);
+  arm.gripper.getWorldPosition(gripPos);
+
+  let closest = null, minD = Infinity;
+  objects.forEach(o => {
+    const d = gripPos.distanceTo(o.position);
+    if (d < minD) { minD = d; closest = o; }
+  });
+  if (!closest || minD > 0.9) return -1;
+
+  const distScore = Math.max(0, 1 - minD / 0.9);
+
+  // Alignment: gripper's local +Y (forward) should point toward target
+  const gripQuat = new THREE.Quaternion();
+  arm.gripper.getWorldQuaternion(gripQuat);
+  const gripDown = new THREE.Vector3(0, 1, 0).applyQuaternion(gripQuat);
+  const toTarget = closest.position.clone().sub(gripPos).normalize();
+  const alignScore = Math.max(0, gripDown.dot(toTarget));
+
+  return Math.round((distScore * 0.6 + alignScore * 0.4) * 100);
+}
+
+// ── Workspace Reachability Heatmap ──
+// Paints the floor with a colour texture showing arm reach coverage
+let heatmapMesh   = null;
+let heatmapActive = false;
+const HMAP_RES    = 48; // grid resolution
+
+function buildHeatmap() {
+  const size = HMAP_RES;
+  const data  = new Uint8Array(size * size * 4);
+  const L1 = 0.28, L2 = 0.24;
+  const maxR = (L1 + L2) * 0.97;
+  const minR = 0.08;
+  const fieldHalf = 4.5;
+
+  for (let row = 0; row < size; row++) {
+    for (let col = 0; col < size; col++) {
+      const wx = ((col / (size - 1)) * 2 - 1) * fieldHalf;
+      const wz = ((row / (size - 1)) * 2 - 1) * fieldHalf;
+      const r  = Math.sqrt(wx * wx + wz * wz);
+
+      let idx = (row * size + col) * 4;
+      if (r >= minR && r <= maxR) {
+        // Reachable: cyan tint, brighter in sweet spot
+        const t = 1 - Math.abs(r - (maxR * 0.6)) / maxR;
+        data[idx]   = 0;
+        data[idx+1] = Math.round(80 + t * 80);
+        data[idx+2] = Math.round(100 + t * 120);
+        data[idx+3] = 70;
+      } else {
+        // Unreachable: red tint
+        data[idx]   = 120;
+        data[idx+1] = 0;
+        data[idx+2] = 30;
+        data[idx+3] = 50;
+      }
+    }
+  }
+
+  const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+  tex.needsUpdate = true;
+
+  const mat  = new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0.55, depthWrite: false });
+  const geo  = new THREE.PlaneGeometry(9, 9);
+  heatmapMesh = new THREE.Mesh(geo, mat);
+  heatmapMesh.rotation.x = -Math.PI / 2;
+  heatmapMesh.position.set(
+    arm.robotBase ? arm.robotBase.position.x : 0,
+    0.005,
+    arm.robotBase ? arm.robotBase.position.z : 0
+  );
+  scene.add(heatmapMesh);
+}
+
+function toggleHeatmap() {
+  heatmapActive = !heatmapActive;
+  if (heatmapActive) {
+    buildHeatmap();
+    document.getElementById('btn-heatmap').textContent = '◈ REACH MAP: ON';
+    toast('WORKSPACE REACHABILITY MAP ON — CYAN=REACHABLE · RED=OUT OF REACH');
+  } else {
+    if (heatmapMesh) { scene.remove(heatmapMesh); heatmapMesh = null; }
+    document.getElementById('btn-heatmap').textContent = '◈ REACH MAP';
+    toast('REACH MAP OFF');
+  }
+}
+
+// ── GLTF / GLB Export ──
+// ── Update proximity HUD ──
+function updateProximityHUD() {
+  const d = getProximityDistance();
+  const el = document.getElementById('h-prox');
+  if (d < 0.08) {
+    el.textContent = 'CRITICAL ' + d.toFixed(2) + 'm';
+    el.className   = 'prox-crit';
+  } else if (d < 0.25) {
+    el.textContent = 'WARN ' + d.toFixed(2) + 'm';
+    el.className   = 'prox-warn';
+  } else if (d < 0.60) {
+    el.textContent = 'NEAR ' + d.toFixed(2) + 'm';
+    el.className   = 'prox-ok';
+    el.style.color = '#ffcc00';
+  } else {
+    el.textContent = 'CLEAR';
+    el.className   = 'prox-ok';
+    el.style.color = '';
+  }
+}
+
+// ── Update grasp quality HUD ──
+function updateGraspQualityHUD() {
+  const q = getGraspQuality();
+  const el = document.getElementById('h-quality');
+  const qb = document.getElementById('quality-bar');
+  const mq = document.getElementById('m-quality');
+  if (q < 0) {
+    el.textContent = '—';
+    if (qb) qb.style.width = '0%';
+    if (mq) mq.textContent = '—';
+  } else {
+    el.textContent = q + '%';
+    if (qb) qb.style.width = q + '%';
+    if (mq) mq.textContent = q + '%';
+    el.style.color = q > 70 ? '#00ff88' : q > 40 ? '#ffcc00' : '#ff3366';
+  }
+}
+
+// ── Update energy HUD ──
+function updateEnergyHUD() {
+  const val = Math.round(totalEnergy);
+  const el = document.getElementById('h-energy');
+  const me = document.getElementById('m-energy');
+  if (el) el.textContent = val + '°';
+  if (me) me.textContent = val;
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'g' || e.key === 'G') pickUp();
+  if (e.key === 'p' || e.key === 'P') putDown();
+  if (e.key === 'r' || e.key === 'R') resetArm();
+  if (e.key === 'n' || e.key === 'N') navigateAndPick();
+});
+
+// ══════════════════════════════════════════════════════════════════
+//  BUTTON BINDINGS
+// ══════════════════════════════════════════════════════════════════
+document.getElementById('btn-pick').onclick    = pickUp;
+document.getElementById('btn-put').onclick     = putDown;
+document.getElementById('btn-scan').onclick    = autoScan;
+document.getElementById('btn-demo').onclick    = demoMode;
+document.getElementById('btn-navpick').onclick = navigateAndPick;
+document.getElementById('btn-parts').onclick   = () => { if (!heldObj) spawnObjects(22); else toast('PUT DOWN FIRST'); };
+document.getElementById('btn-reset').onclick   = resetArm;
+
+// v7 button bindings
+document.getElementById('btn-tcp-trail').onclick   = toggleTCPTrail;
+document.getElementById('btn-heatmap').onclick     = toggleHeatmap;
+
+// Presets
+const PRESETS = {
+  'p-home':  { base:0, shoulder:0,    elbow:0,   wristPitch:0,   wristRoll:0,  wristYaw:0,  gripper:0.5 },
+  'p-reach': { base:0, shoulder:50,   elbow:60,  wristPitch:-40, wristRoll:0,  wristYaw:0,  gripper:1   },
+  'p-fold':  { base:0, shoulder:-100, elbow:130, wristPitch:50,  wristRoll:0,  wristYaw:0,  gripper:0   },
+  'p-left':  { base:-90, shoulder:30, elbow:40,  wristPitch:-20, wristRoll:45, wristYaw:0,  gripper:0.5 },
+  'p-right': { base:90,  shoulder:30, elbow:40,  wristPitch:-20, wristRoll:-45,wristYaw:0,  gripper:0.5 },
+  'p-wave':  null,
+};
+Object.keys(PRESETS).forEach(id => {
+  document.getElementById(id).onclick = () => {
+    if (id === 'p-wave') { waveMotion(); return; }
+    animateTo(PRESETS[id], 1000);
+  };
+});
+
+document.querySelectorAll('.speed-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    speedMult = parseFloat(btn.dataset.speed);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════
+//  TOAST
+// ══════════════════════════════════════════════════════════════════
+let toastTimer;
+function toast(msg, isWarning = false) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.toggle('warn-toast', isWarning);
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  MAIN ANIMATION LOOP
+// ══════════════════════════════════════════════════════════════════
+let t = 0;
+function animate() {
+  requestAnimationFrame(animate);
+  t += 0.01;
+
+  processKeys();
+
+  // Idle gripper light pulse
+  if (!isMoving && arm.gripper) {
+    arm.gripper.children.forEach(c => {
+      if (c.material && c.material.emissiveIntensity !== undefined
+          && c.material.color.getHex() === 0x00ff88) {
+        c.material.emissiveIntensity = 1.5 + Math.sin(t * 3) * 0.5;
+      }
+    });
+  }
+
+  // Held object glows while gripped
+  if (heldObj && heldObj.material) {
+    heldObj.material.emissiveIntensity = 0.12 + Math.sin(t * 6) * 0.08;
+  }
+
+  // Live HUD updates
+  updateProximityHUD();
+  updateGraspQualityHUD();
+  updateEnergyHUD();
+  updateTCPTrail();
+
+  if (baseMoving) updateHUD();
+
+  renderer.render(scene, camera);
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  RESIZE
+// ══════════════════════════════════════════════════════════════════
+window.addEventListener('resize', () => {
+  camera.aspect = wrap.clientWidth / wrap.clientHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(wrap.clientWidth, wrap.clientHeight);
+});
+
+// ══════════════════════════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════════════════════════
+buildEnv();
+buildArm();
+spawnObjects(22);
+applyJoints();
+syncSliders();
+updateCamera();
+animate();
+
+toast('SYSTEM READY — v7 · SEGMENT COLLISION ACTIVE');
+
+// ══════════════════════════════════════════════════════════════════
+//  ███████╗████████╗ ██████╗  ██████╗██╗  ██╗ █████╗ ███████╗████████╗██╗ ██████╗
+//  ██╔════╝╚══██╔══╝██╔═══██╗██╔════╝██║  ██║██╔══██╗██╔════╝╚══██╔══╝██║██╔════╝
+//  ███████╗   ██║   ██║   ██║██║     ███████║███████║███████╗   ██║   ██║██║
+//  ╚════██║   ██║   ██║   ██║██║     ██╔══██║██╔══██║╚════██║   ██║   ██║██║
+//  ███████║   ██║   ╚██████╔╝╚██████╗██║  ██║██║  ██║███████║   ██║   ██║╚██████╗
+//  ╚══════╝   ╚═╝    ╚═════╝  ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝   ╚═╝   ╚═╝ ╚═════╝
+//  PROBABILISTIC EVENT-DRIVEN ROBOTIC MANIPULATION SIMULATOR — v5
+// ══════════════════════════════════════════════════════════════════
+
+// ──────────────────────────────────────────────────────────────────
+// MODULE: probability.js
+// Statistical distribution functions — reusable primitives
+// ──────────────────────────────────────────────────────────────────
+
+/**
+ * gaussian(mean, std) — Box-Muller transform for normal distribution
+ * Returns a sample from N(mean, std²)
+ */
+function gaussian(mean, std) {
+  let u1, u2;
+  do { u1 = Math.random(); } while (u1 === 0); // guard against log(0)
+  u2 = Math.random();
+  const z = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
+  return mean + z * std;
+}
+
+/**
+ * exponential(lambda) — Inverse CDF method
+ * Returns a sample from Exp(λ); mean = 1/λ
+ */
+function exponential(lambda) {
+  return -Math.log(1.0 - Math.random()) / lambda;
+}
+
+/**
+ * bernoulli(p) — Returns true with probability p (Bernoulli trial)
+ */
+function bernoulli(p) {
+  return Math.random() < p;
+}
+
+/** randInRange(min, max) — Uniform continuous sample */
+function randInRange(min, max) {
+  return min + Math.random() * (max - min);
+}
+
+// ──────────────────────────────────────────────────────────────────
+// MODULE: scenarios
+// Two operating modes — Normal vs High-stress
+// ──────────────────────────────────────────────────────────────────
+
+const SCENARIOS = {
+  normal: {
+    label:       'NORMAL',
+    graspP:      0.85,   // Bernoulli p for grasp success
+    noiseMag:    0.02,   // σ for sensor noise (metres)
+    delayLambda: 3.0,    // λ for Exp delay; mean = 333ms
+  },
+  stress: {
+    label:       'HIGH-STRESS',
+    graspP:      0.45,   // significantly degraded
+    noiseMag:    0.08,   // 4× the noise
+    delayLambda: 1.2,    // slower, more variable; mean = 833ms
+  }
+};
+
+let activeScenario = 'normal';
+function getScenario() { return SCENARIOS[activeScenario]; }
+
+// ──────────────────────────────────────────────────────────────────
+// MODULE: fatigue.js
+// BioGears-equivalent performance / fatigue degradation model.
+// fatigue ∈ [0, 1] saturates after 5 min of continuous operation.
+// Affects: grasp probability, movement speed, failure rate.
+// ──────────────────────────────────────────────────────────────────
+
+let _simWorkStartWall = null; // wall-clock ms when sim started
+
+function resetFatigue() {
+  _simWorkStartWall = performance.now();
+}
+
+/**
+ * getFatigue() — Returns fatigue ∈ [0, 1]
+ * Rises linearly to 1.0 over 300 s (5 minutes of continuous work)
+ */
+function getFatigue() {
+  if (!_simWorkStartWall) return 0;
+  const elapsed = (performance.now() - _simWorkStartWall) / 1000;
+  return Math.min(1.0, elapsed / 300.0);
+}
+
+/**
+ * getAccuracy(fatigue) — Maps fatigue → accuracy multiplier [0.4, 1.0]
+ * At full fatigue the arm is 60% less accurate.
+ */
+function getAccuracy(fatigue) {
+  return Math.max(0.1, 1.0 - fatigue * 0.6);
+}
+
+/**
+ * getSpeedFactor(fatigue) — Maps fatigue → speed multiplier [0.3, 1.0]
+ * At full fatigue movement is 70% slower.
+ */
+function getSpeedFactor(fatigue) {
+  return Math.max(0.3, 1.0 - fatigue * 0.7);
+}
+
+/**
+ * getEffectiveGraspP() — Combines scenario P with fatigue-based accuracy
+ */
+function getEffectiveGraspP() {
+  const scenario = getScenario();
+  const f        = getFatigue();
+  const acc      = getAccuracy(f);
+  return Math.max(0.05, scenario.graspP * acc);
+}
+
+/**
+ * getEffectiveDelay() — ms delay for robot response (Exp + fatigue penalty)
+ */
+function getEffectiveDelay() {
+  const scenario    = getScenario();
+  const f           = getFatigue();
+  const baseMs      = exponential(scenario.delayLambda) * 800; // scale to useful range
+  const fatiguePenalty = f * 600;                              // up to +600ms
+  return Math.max(200, baseMs + fatiguePenalty);
+}
+
+// ──────────────────────────────────────────────────────────────────
+// MODULE: metrics.js
+// Tracks all simulation analytics and updates the live UI panel.
+// ──────────────────────────────────────────────────────────────────
+
+const metrics = {
+  totalAttempts:    0,
+  successfulPicks:  0,
+  failedPicks:      0,
+  collisions:       0,
+  simStartWall:     null,  // wall-clock start
+  pickStartWall:    null,  // start of current pick
+  pickTimes:        [],    // array of pick durations (ms)
+  rateHistory:      [],    // [{t_sec, rate}] for sparkline
+};
+
+function resetMetrics() {
+  metrics.totalAttempts   = 0;
+  metrics.successfulPicks = 0;
+  metrics.failedPicks     = 0;
+  metrics.collisions      = 0;
+  metrics.simStartWall    = performance.now();
+  metrics.pickStartWall   = null;
+  metrics.pickTimes       = [];
+  metrics.rateHistory     = [];
+}
+
+function recordPickAttempt() {
+  metrics.totalAttempts++;
+  metrics.pickStartWall = performance.now();
+}
+
+function recordPickSuccess() {
+  metrics.successfulPicks++;
+  if (metrics.pickStartWall) {
+    metrics.pickTimes.push(performance.now() - metrics.pickStartWall);
+  }
+  // Store rate snapshot for sparkline
+  const t = metrics.simStartWall ? (performance.now() - metrics.simStartWall) / 1000 : 0;
+  metrics.rateHistory.push({ t, rate: getSuccessRate() });
+  drawSparkline();
+}
+
+function recordPickFailure() {
+  metrics.failedPicks++;
+}
+
+function recordSimCollision() {
+  metrics.collisions++;
+}
+
+function getSuccessRate() {
+  if (metrics.totalAttempts === 0) return 0;
+  return metrics.successfulPicks / metrics.totalAttempts;
+}
+
+function getAvgPickTimeMs() {
+  if (metrics.pickTimes.length === 0) return 0;
+  return metrics.pickTimes.reduce((a, b) => a + b, 0) / metrics.pickTimes.length;
+}
+
+function getThroughputPerMin() {
+  if (!metrics.simStartWall || metrics.successfulPicks === 0) return 0;
+  const elapsedMin = (performance.now() - metrics.simStartWall) / 60000;
+  return metrics.successfulPicks / elapsedMin;
+}
+
+/** updateMetricsUI — refreshes all live metric DOM elements */
+function updateMetricsUI() {
+  document.getElementById('m-attempts').textContent    = metrics.totalAttempts;
+  document.getElementById('m-success').textContent     = metrics.successfulPicks;
+  document.getElementById('m-fail').textContent        = metrics.failedPicks;
+  document.getElementById('m-rate').textContent        =
+    metrics.totalAttempts > 0 ? (getSuccessRate() * 100).toFixed(1) + '%' : '—';
+  document.getElementById('m-avgtime').textContent     =
+    metrics.pickTimes.length > 0 ? (getAvgPickTimeMs() / 1000).toFixed(2) + 's' : '—';
+  document.getElementById('m-throughput').textContent  =
+    metrics.simStartWall ? getThroughputPerMin().toFixed(2) + '/min' : '—';
+  document.getElementById('m-collisions').textContent  = metrics.collisions;
+  document.getElementById('m-energy').textContent      = Math.round(totalEnergy);
+
+  // Fatigue
+  const f = getFatigue();
+  document.getElementById('m-fatigue').textContent     = (f * 100).toFixed(1) + '%';
+  document.getElementById('fatigue-bar').style.width   = (f * 100).toFixed(1) + '%';
+}
+
+/** drawSparkline — renders success-rate history as a mini line chart */
+function drawSparkline() {
+  const canvas = document.getElementById('sparkline-canvas');
+  if (!canvas) return;
+  const W = canvas.offsetWidth || 220;
+  const H = 36;
+  canvas.width  = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#060a0f';
+  ctx.fillRect(0, 0, W, H);
+
+  const hist = metrics.rateHistory;
+  if (hist.length < 2) return;
+
+  // 50% reference line
+  ctx.strokeStyle = 'rgba(74,122,155,0.4)';
+  ctx.setLineDash([3, 3]);
+  ctx.beginPath();
+  ctx.moveTo(0, H * 0.5); ctx.lineTo(W, H * 0.5);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Rate line
+  ctx.strokeStyle = '#00d4ff';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  hist.forEach((pt, i) => {
+    const x = (i / (hist.length - 1)) * W;
+    const y = H - pt.rate * H * 0.92 - 2;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  // Area fill
+  ctx.fillStyle = 'rgba(0,212,255,0.06)';
+  ctx.beginPath();
+  hist.forEach((pt, i) => {
+    const x = (i / (hist.length - 1)) * W;
+    const y = H - pt.rate * H * 0.92 - 2;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath();
+  ctx.fill();
+}
+
+// ──────────────────────────────────────────────────────────────────
+// MODULE: simulation.js
+// Discrete event simulation system — event queue, scheduler, handler.
+// Events modify system state and schedule further events.
+// ──────────────────────────────────────────────────────────────────
+
+/** Event type constants */
+const EV = {
+  OBJECT_SPAWN:   'OBJECT_SPAWN',
+  MOVE_TO_TARGET: 'MOVE_TO_TARGET',
+  PICK_ATTEMPT:   'PICK_ATTEMPT',
+  GRASP_SUCCESS:  'GRASP_SUCCESS',
+  GRASP_FAILURE:  'GRASP_FAILURE',
+  PLACE_OBJECT:   'PLACE_OBJECT',
+  COLLISION:      'COLLISION',
+  TASK_COMPLETE:  'TASK_COMPLETE',
+};
+
+const eventQueue   = [];   // sorted array of {time, type, data}
+let   simClock     = 0;    // virtual sim time (wall-clock ms)
+let   autoSimRunning = false;
+let   autoSimLocked  = false; // prevents re-entrant pick cycles
+
+/**
+ * scheduleEvent(time, type, data)
+ * Inserts event into sorted queue — O(n) insert, fine for our queue sizes.
+ */
+function scheduleEvent(time, type, data = {}) {
+  eventQueue.push({ time, type, data });
+  eventQueue.sort((a, b) => a.time - b.time);
+}
+
+/**
+ * processEvents(currentWallTime)
+ * Called every animation frame. Drains all events whose scheduled
+ * time has been reached.
+ */
+function processEvents(currentWallTime) {
+  simClock = currentWallTime;
+  while (eventQueue.length > 0 && eventQueue[0].time <= currentWallTime) {
+    const ev = eventQueue.shift();
+    handleEvent(ev);
+  }
+}
+
+/** logEvent — prepends a row to the visible event log */
+function logEvent(type, detail) {
+  const body = document.getElementById('event-log-body');
+  if (!body) return;
+  const COLOR_MAP = {
+    [EV.GRASP_SUCCESS]:  '#00ff88',
+    [EV.GRASP_FAILURE]:  '#ff3366',
+    [EV.COLLISION]:      '#ff6b00',
+    [EV.TASK_COMPLETE]:  '#00d4ff',
+    [EV.PICK_ATTEMPT]:   '#c8e0f0',
+    [EV.MOVE_TO_TARGET]: '#4a7a9b',
+    [EV.OBJECT_SPAWN]:   '#bb44ff',
+    [EV.PLACE_OBJECT]:   '#ffcc00',
+  };
+  const color = COLOR_MAP[type] || '#c8e0f0';
+  const row = document.createElement('div');
+  row.style.cssText = `font-size:9px;padding:2px 0;border-bottom:1px solid #0d1a24;color:${color};white-space:nowrap;overflow:hidden;text-overflow:ellipsis`;
+  const tsec = ((simClock - (metrics.simStartWall || simClock)) / 1000).toFixed(1);
+  row.textContent = `[+${tsec}s] ${type}${detail ? ' · ' + detail : ''}`;
+  body.insertBefore(row, body.firstChild);
+  while (body.children.length > 60) body.removeChild(body.lastChild);
+}
+
+/**
+ * handleEvent — state machine for all event types.
+ * Each case modifies state and/or schedules new events.
+ */
+function handleEvent(ev) {
+  const { type, data } = ev;
+  logEvent(type, data.detail);
+
+  switch (type) {
+
+    // ── OBJECT_SPAWN: add a new target with stochastic position ──
+    case EV.OBJECT_SPAWN:
+      spawnStochasticObject();
+      break;
+
+    // ── MOVE_TO_TARGET: robot begins approach phase ──
+    case EV.MOVE_TO_TARGET:
+      if (!autoSimRunning || autoSimLocked) break;
+      autoSimLocked = true;
+      // Schedule the actual pick attempt after a noisy movement delay
+      {
+        const delay = getEffectiveDelay();
+        setTimeout(() => {
+          scheduleEvent(simClock + delay * 0.1, EV.PICK_ATTEMPT, {
+            detail: `delay=${delay.toFixed(0)}ms`
+          });
+        }, delay);
+      }
+      break;
+
+    // ── PICK_ATTEMPT: probabilistic grasp execution ──
+    case EV.PICK_ATTEMPT:
+      if (!autoSimRunning || !autoSimLocked) break;
+      recordPickAttempt();
+      doStochasticPick();
+      break;
+
+    // ── GRASP_SUCCESS: object secured ──
+    case EV.GRASP_SUCCESS:
+      recordPickSuccess();
+      flashSuccessIndicator(true);
+      updateMetricsUI();
+      if (autoSimRunning) {
+        setTimeout(() => {
+          scheduleEvent(simClock + 50, EV.PLACE_OBJECT, {});
+        }, 50);
+      }
+      break;
+
+    // ── GRASP_FAILURE: missed or dropped ──
+    case EV.GRASP_FAILURE:
+      recordPickFailure();
+      flashSuccessIndicator(false);
+      autoSimLocked = false;
+      updateMetricsUI();
+      if (autoSimRunning) {
+        // Exponential back-off before retry
+        const backoff = exponential(0.8) * 1000 + 1200;
+        setTimeout(() => {
+          if (autoSimRunning) scheduleNextPickCycle();
+        }, backoff);
+      }
+      break;
+
+    // ── PLACE_OBJECT: deposit held object ──
+    case EV.PLACE_OBJECT:
+      if (heldObj && !isMoving) {
+        putDown();
+        setTimeout(() => {
+          autoSimLocked = false;
+          updateMetricsUI();
+          if (autoSimRunning) {
+            scheduleEvent(simClock + 300, EV.TASK_COMPLETE, {
+              detail: `rate=${(getSuccessRate()*100).toFixed(1)}%`
+            });
+          }
+        }, 2600);
+      } else {
+        autoSimLocked = false;
+        if (autoSimRunning) scheduleNextPickCycle();
+      }
+      break;
+
+    // ── COLLISION: record and continue ──
+    case EV.COLLISION:
+      recordSimCollision();
+      updateMetricsUI();
+      break;
+
+    // ── TASK_COMPLETE: one full pick-and-place cycle done ──
+    case EV.TASK_COMPLETE:
+      updateMetricsUI();
+      autoSimLocked = false;
+      if (autoSimRunning) {
+        if (objects.length === 0) {
+          scheduleEvent(simClock + 500, EV.OBJECT_SPAWN, { detail: 'refill' });
+        } else {
+          scheduleNextPickCycle();
+        }
+      }
+      break;
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────
+// MODULE: robotControl.js (stochastic extension)
+// Stochastic object spawning and grasp execution with IK, noise, fatigue.
+// ──────────────────────────────────────────────────────────────────
+
+/**
+ * spawnStochasticObject — spawn one object at a noisy random position
+ * Gaussian position noise models sensor positioning uncertainty.
+ */
+function spawnStochasticObject() {
+  const scenario = getScenario();
+  // Base position drawn from bounded uniform, plus Gaussian noise
+  const baseX = randInRange(-1.8, 1.8);
+  const baseZ = randInRange(-1.8, 1.8);
+  const noisyX = baseX + gaussian(0, scenario.noiseMag * 8);
+  const noisyZ = baseZ + gaussian(0, scenario.noiseMag * 8);
+  const px = Math.max(-2.2, Math.min(2.2, noisyX));
+  const pz = Math.max(-2.2, Math.min(2.2, noisyZ));
+
+  const types = ['box', 'cyl', 'sphere', 'cone'];
+  const t = types[Math.floor(Math.random() * types.length)];
+  const c = COLORS[Math.floor(Math.random() * COLORS.length)];
+
+  let geo;
+  if (t === 'box')    geo = new THREE.BoxGeometry(0.10, 0.10, 0.10);
+  if (t === 'cyl')    geo = new THREE.CylinderGeometry(0.05, 0.05, 0.12, 16);
+  if (t === 'sphere') geo = new THREE.SphereGeometry(0.06, 16, 16);
+  if (t === 'cone')   geo = new THREE.CylinderGeometry(0.02, 0.07, 0.12, 12);
+
+  const mat = new THREE.MeshStandardMaterial({
+    color: c, roughness: 0.4, metalness: 0.5,
+    emissive: c, emissiveIntensity: 0.05
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  const tempBox = new THREE.Box3().setFromObject(mesh);
+  const sz = tempBox.getSize(new THREE.Vector3());
+  mesh.position.set(px, sz.y / 2, pz);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  mesh.userData.isTarget = true;
+  scene.add(mesh);
+  objects.push(mesh);
+  document.getElementById('obj-count').textContent = objects.length + ' OBJECTS';
+
+  if (autoSimRunning && !autoSimLocked) scheduleNextPickCycle();
+}
+
+/**
+ * scheduleNextPickCycle — queue the next MOVE→PICK cycle
+ */
+function scheduleNextPickCycle() {
+  if (!autoSimRunning || autoSimLocked) return;
+  if (objects.length === 0) {
+    scheduleEvent(simClock + 400, EV.OBJECT_SPAWN, { detail: 'empty-refill' });
+    return;
+  }
+  const moveDelay = getEffectiveDelay();
+  scheduleEvent(simClock + moveDelay * 0.15, EV.MOVE_TO_TARGET, {
+    detail: `moveDelay=${moveDelay.toFixed(0)}ms`
+  });
+}
+
+/**
+ * doStochasticPick — executes a pick attempt with:
+ *   • Gaussian sensor noise applied to target position
+ *   • Bernoulli grasp outcome (uses effective P from fatigue + scenario)
+ *   • Fatigue-based speed degradation applied to animateTo()
+ *   • On failure: fingers open, arm retracts, GRASP_FAILURE event fires
+ */
+function doStochasticPick() {
+  if (heldObj || isMoving) {
+    autoSimLocked = false;
+    if (autoSimRunning) setTimeout(scheduleNextPickCycle, 1500);
+    return;
+  }
+
+  // First try to navigate close enough
+  const rbPos = arm.robotBase.position;
+  let targetObj = null, minD = Infinity;
+  objects.forEach(o => {
+    const d = Math.sqrt(
+      Math.pow(o.position.x - rbPos.x, 2) +
+      Math.pow(o.position.z - rbPos.z, 2)
+    );
+    if (d < minD) { minD = d; targetObj = o; }
+  });
+
+  if (!targetObj) {
+    autoSimLocked = false;
+    scheduleEvent(simClock + 300, EV.OBJECT_SPAWN, { detail: 'no-targets' });
+    return;
+  }
+
+  const APPROACH = 0.38;
+  if (minD > APPROACH + 0.05) {
+    // Need to navigate first
+    const dir = new THREE.Vector3(
+      targetObj.position.x - rbPos.x, 0,
+      targetObj.position.z - rbPos.z
+    ).normalize();
+    const navDist = minD - APPROACH;
+    const navTarget = new THREE.Vector3(
+      rbPos.x + dir.x * navDist, 0,
+      rbPos.z + dir.z * navDist
+    );
+    const fatigue = getFatigue();
+    const oldSpeed = speedMult;
+    speedMult = getSpeedFactor(fatigue);
+    animateBaseTo(navTarget, 1200 / speedMult, () => {
+      speedMult = oldSpeed;
+      // After navigation, attempt the grasp
+      _executeGraspAttempt(targetObj);
+    });
+  } else {
+    _executeGraspAttempt(targetObj);
+  }
+}
+
+/**
+ * _executeGraspAttempt — core stochastic grasp logic.
+ * Injects Gaussian noise to target, applies fatigue speed factor,
+ * then fires Bernoulli(p) to determine success or failure.
+ */
+function _executeGraspAttempt(obj) {
+  const scenario      = getScenario();
+  const fatigue       = getFatigue();
+  const effectiveP    = getEffectiveGraspP();
+  const speedFactor   = getSpeedFactor(fatigue);
+  const oldSpeedMult  = speedMult;
+
+  // Sensor noise: Gaussian position uncertainty
+  const noisyTarget = obj.position.clone();
+  noisyTarget.x += gaussian(0, scenario.noiseMag);
+  noisyTarget.z += gaussian(0, scenario.noiseMag);
+  noisyTarget.y  = Math.max(0.01, noisyTarget.y + gaussian(0, scenario.noiseMag * 0.5));
+
+  const abovePos = noisyTarget.clone().add(new THREE.Vector3(0, 0.30, 0));
+  const pickPos  = noisyTarget.clone().add(new THREE.Vector3(0, 0.05, 0));
+  const ikAbove  = solveIK(abovePos);
+  const ikPick   = solveIK(pickPos);
+
+  if (!ikAbove || !ikPick) {
+    autoSimLocked = false;
+    scheduleEvent(simClock + 100, EV.GRASP_FAILURE, { detail: 'IK-unreachable' });
+    return;
+  }
+
+  toast(`PICK P=${(effectiveP*100).toFixed(0)}% FAT=${(fatigue*100).toFixed(0)}%`);
+  speedMult = speedFactor;
+
+  const overrides = { wristRoll: 0, wristYaw: 0 };
+
+  // Phase 1: approach above
+  animateTo({ ...ikAbove, gripper: 1.0, ...overrides }, 900, () => {
+    // Phase 2: descend
+    animateTo({ ...ikPick, gripper: 1.0, ...overrides }, 600, () => {
+      // Phase 3: close fingers
+      animateTo({ ...current, gripper: 0.08 }, 400, () => {
+        speedMult = oldSpeedMult;
+
+        // ── BERNOULLI GRASP OUTCOME ──
+        if (bernoulli(effectiveP)) {
+          // ✓ SUCCESS path
+          pickObject(obj);
+          scheduleEvent(simClock + 80, EV.GRASP_SUCCESS, {
+            detail: `p=${(effectiveP*100).toFixed(0)}% ✓ fat=${(fatigue*100).toFixed(0)}%`
+          });
+          // Lift clear — object rides in gripper scene-graph
+          animateTo({ ...ikAbove, gripper: 0.08, ...overrides }, 650);
+        } else {
+          // ✗ FAILURE path — open fingers and retreat
+          animateTo({ ...current, gripper: 1.0 }, 350, () => {
+            speedMult = oldSpeedMult;
+            scheduleEvent(simClock + 80, EV.GRASP_FAILURE, {
+              detail: `p=${(effectiveP*100).toFixed(0)}% ✗ fat=${(fatigue*100).toFixed(0)}%`
+            });
+            // Retract arm
+            animateTo({ ...ikAbove, gripper: 1.0, ...overrides }, 500);
+          });
+        }
+      });
+    });
+  });
+}
+
+// ──────────────────────────────────────────────────────────────────
+// MODULE: visualization — flash overlay and sparkline
+// ──────────────────────────────────────────────────────────────────
+
+/**
+ * flashSuccessIndicator — full-screen flash: green=success, red=failure
+ */
+function flashSuccessIndicator(success) {
+  const overlay = document.getElementById('flash-overlay');
+  if (!overlay) return;
+  overlay.style.background = success
+    ? 'rgba(0,255,136,0.20)'
+    : 'rgba(255,51,102,0.22)';
+  overlay.style.opacity = '1';
+  setTimeout(() => { overlay.style.opacity = '0'; }, 420);
+}
+
+// ──────────────────────────────────────────────────────────────────
+// MODULE: monteCarlo.js
+// Pure statistical simulation — no Three.js, runs synchronously.
+// ──────────────────────────────────────────────────────────────────
+
+/**
+ * _runOneScenario(nRuns, scenarioKey)
+ * Simulates nRuns full pick sessions (10 picks each) purely statistically.
+ * Models fatigue accumulation per pick within a session.
+ * Returns: { mean, std, variance, failProb, rates[] }
+ */
+function _runOneScenario(nRuns, scenarioKey) {
+  const scenario = SCENARIOS[scenarioKey];
+  const PICKS_PER_RUN = 12;
+  const rates = [];
+
+  for (let run = 0; run < nRuns; run++) {
+    let successes = 0;
+
+    for (let pick = 0; pick < PICKS_PER_RUN; pick++) {
+      // Simulate fatigue accumulation within the run (0→0.7 over PICKS_PER_RUN)
+      const fakeFatigue = Math.min(1.0, (pick / PICKS_PER_RUN) * 0.7);
+      const accuracy    = getAccuracy(fakeFatigue);
+      // Effective p with fatigue and Gaussian uncertainty
+      const effectiveP  = Math.max(0.02, scenario.graspP * accuracy);
+      const noisyP      = Math.max(0.0, Math.min(1.0,
+        effectiveP + gaussian(0, scenario.noiseMag * 3)
+      ));
+
+      // Bernoulli trial — could fail for noise, terrain, or fatigue
+      if (bernoulli(noisyP)) successes++;
+
+      // Exponential inter-pick delay (adds variability between runs)
+      // Not simulated in real-time — just samples the distribution
+      exponential(scenario.delayLambda); // consumed for RNG state advancement
+    }
+
+    rates.push(successes / PICKS_PER_RUN);
+  }
+
+  const mean     = rates.reduce((a, b) => a + b, 0) / nRuns;
+  const variance = rates.reduce((a, b) => a + (b - mean) ** 2, 0) / nRuns;
+  const std      = Math.sqrt(variance);
+  const failProb = rates.filter(r => r < 0.5).length / nRuns;
+
+  return { mean, std, variance, failProb, rates };
+}
+
+/**
+ * runMonteCarlo(nRuns=100)
+ * Runs both scenarios and displays comparison results + histogram chart.
+ */
+function runMonteCarlo(nRuns = 100) {
+  toast('RUNNING MONTE CARLO…');
+  logEvent(EV.TASK_COMPLETE, `Starting ${nRuns}-run MC…`);
+
+  const normalResult = _runOneScenario(nRuns, 'normal');
+  const stressResult = _runOneScenario(nRuns, 'stress');
+
+  // Show results panel
+  const panel = document.getElementById('mc-results');
+  panel.style.display = 'block';
+
+  document.getElementById('mc-runs').textContent        = nRuns;
+  document.getElementById('mc-normal-mean').textContent = (normalResult.mean * 100).toFixed(1) + '%';
+  document.getElementById('mc-normal-std').textContent  = '±' + (normalResult.std * 100).toFixed(1) + '%';
+  document.getElementById('mc-stress-mean').textContent = (stressResult.mean * 100).toFixed(1) + '%';
+  document.getElementById('mc-stress-std').textContent  = '±' + (stressResult.std * 100).toFixed(1) + '%';
+  document.getElementById('mc-failprob').textContent    = (stressResult.failProb * 100).toFixed(1) + '%';
+
+  // 95% CI for normal: mean ± 1.96*std/√n
+  const ciHalf = 1.96 * normalResult.std / Math.sqrt(nRuns);
+  document.getElementById('mc-ci-normal').textContent =
+    '[' + ((normalResult.mean - ciHalf) * 100).toFixed(1) + '%, ' +
+          ((normalResult.mean + ciHalf) * 100).toFixed(1) + '%]';
+
+  drawMonteCarloHistogram(normalResult.rates, stressResult.rates);
+
+  const msg = `MC DONE — N:${(normalResult.mean*100).toFixed(0)}% S:${(stressResult.mean*100).toFixed(0)}% FailP:${(stressResult.failProb*100).toFixed(0)}%`;
+  toast(msg);
+  logEvent(EV.TASK_COMPLETE, msg);
+}
+
+/**
+ * drawMonteCarloHistogram — paired histogram of success-rate distributions
+ * Cyan = Normal, Orange = Stress
+ */
+function drawMonteCarloHistogram(normalRates, stressRates) {
+  const canvas = document.getElementById('mc-chart');
+  if (!canvas) return;
+  const W = canvas.offsetWidth || 230;
+  const H = 80;
+  canvas.width  = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+
+  ctx.fillStyle = '#06090e';
+  ctx.fillRect(0, 0, W, H);
+
+  const BINS = 10;
+  const nCounts = new Array(BINS).fill(0);
+  const sCounts = new Array(BINS).fill(0);
+
+  normalRates.forEach(r => { nCounts[Math.min(BINS-1, Math.floor(r * BINS))]++; });
+  stressRates.forEach(r => { sCounts[Math.min(BINS-1, Math.floor(r * BINS))]++; });
+
+  const maxC = Math.max(...nCounts, ...sCounts, 1);
+  const bw   = W / BINS;
+  const pad  = 12; // reserve bottom for labels
+
+  for (let i = 0; i < BINS; i++) {
+    const nh = (nCounts[i] / maxC) * (H - pad);
+    const sh = (sCounts[i] / maxC) * (H - pad);
+
+    // Normal: cyan
+    ctx.fillStyle = 'rgba(0,212,255,0.65)';
+    ctx.fillRect(i * bw + 1, H - pad - nh, bw / 2 - 1, nh);
+
+    // Stress: orange
+    ctx.fillStyle = 'rgba(255,107,0,0.65)';
+    ctx.fillRect(i * bw + bw / 2, H - pad - sh, bw / 2 - 1, sh);
+  }
+
+  // X-axis grid labels
+  ctx.fillStyle = '#2a5a7c';
+  ctx.font = '7px monospace';
+  for (let i = 0; i <= BINS; i++) {
+    const x = i * bw;
+    ctx.fillText((i * 10) + '%', x, H - 1);
+    ctx.strokeStyle = 'rgba(26,58,92,0.4)';
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H - pad); ctx.stroke();
+  }
+
+  // Mean lines
+  const nMean = normalRates.reduce((a,b)=>a+b,0)/normalRates.length;
+  const sMean = stressRates.reduce((a,b)=>a+b,0)/stressRates.length;
+  const drawMean = (mean, color) => {
+    const x = mean * W;
+    ctx.strokeStyle = color; ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 2]);
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H - pad); ctx.stroke();
+    ctx.setLineDash([]);
+  };
+  drawMean(nMean, '#00d4ff');
+  drawMean(sMean, '#ff6b00');
+}
+
+// ──────────────────────────────────────────────────────────────────
+// MODULE: ui.js — Scenario/simulation UI bindings
+// ──────────────────────────────────────────────────────────────────
+
+function setScenario(mode) {
+  activeScenario = mode;
+  const sc = getScenario();
+  document.getElementById('stat-graspp').textContent = (sc.graspP * 100).toFixed(0) + '%';
+  document.getElementById('stat-noise').textContent  = mode === 'normal' ? 'LOW' : 'HIGH';
+  document.getElementById('stat-lambda').textContent = sc.delayLambda.toFixed(1);
+  document.getElementById('btn-normal-mode').classList.toggle('active', mode === 'normal');
+  document.getElementById('btn-stress-mode').classList.toggle('active', mode === 'stress');
+  toast('SCENARIO: ' + sc.label, mode === 'stress');
+  logEvent(EV.TASK_COMPLETE, 'Scenario → ' + sc.label);
+}
+
+function startAutoSim() {
+  if (autoSimRunning) return;
+  autoSimRunning = true;
+  autoSimLocked  = false;
+  autoSimAborted = false;
+  resetMetrics();
+  resetFatigue();
+  simClock = performance.now();
+  eventQueue.length = 0;
+
+  document.getElementById('sim-status-badge').textContent = '● RUNNING';
+  document.getElementById('sim-status-badge').className   = 'sim-badge running';
+  document.getElementById('ev-sim-status').textContent    = 'RUNNING';
+  document.getElementById('ev-sim-status').style.color    = '#00ff88';
+
+  toast('AUTO GATHER STARTED');
+  logEvent(EV.TASK_COMPLETE, 'Gather started · ' + getScenario().label);
+
+  // Kick off the continuous gather loop (not the old stochastic scheduler)
+  runGatherLoop();
+}
+
+function stopAutoSim() {
+  autoSimRunning = false;
+  autoSimLocked  = false;
+  autoSimAborted = true;
+  eventQueue.length = 0;
+
+  document.getElementById('sim-status-badge').textContent = '● STOPPED';
+  document.getElementById('sim-status-badge').className   = 'sim-badge stopped';
+  document.getElementById('ev-sim-status').textContent    = 'STOPPED';
+  document.getElementById('ev-sim-status').style.color    = '#ff3366';
+
+  toast('GATHER STOPPED');
+  logEvent(EV.TASK_COMPLETE, `Gather stopped · picked=${metrics.successfulPicks}`);
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  CONTINUOUS GATHER LOOP — the real "Auto Simulate"
+//  Drives to object → picks → drives to circle → places → repeats
+//  until no objects remain, then stops cleanly.
+// ══════════════════════════════════════════════════════════════════
+let autoSimAborted = false;  // set by stopAutoSim to break out mid-cycle
+
+// Promisified wrappers around the existing callback-based animators
+function pAnimateTo(target, duration) {
+  return new Promise(resolve => animateTo(target, duration, resolve));
+}
+function pAnimateBaseTo(pos, duration) {
+  return new Promise(resolve => animateBaseTo(pos, duration, resolve));
+}
+function pWait(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Deposit positions inside the collection circle (jittered ring so objects don't all stack)
+function getNextDropPosition() {
+  // Use successfulPicks count to spiral outward slightly, then ring around
+  const n = metrics.successfulPicks;
+  const ringIdx  = Math.floor(n / 6);            // 6 per ring
+  const posInRing = n % 6;
+  const angle    = (posInRing / 6) * Math.PI * 2 + ringIdx * 0.4;
+  const r        = Math.min(COLLECTION_RADIUS * 0.7, 0.08 + ringIdx * 0.10);
+  return new THREE.Vector3(
+    COLLECTION_CENTER.x + Math.cos(angle) * r,
+    0.08,
+    COLLECTION_CENTER.z + Math.sin(angle) * r
+  );
+}
+
+// Find the object furthest from the drop zone — that way the robot
+// works from the outside in and doesn't re-disturb placed piles.
+function pickTargetObject() {
+  if (objects.length === 0) return null;
+  let best = null, bestScore = -Infinity;
+  objects.forEach(o => {
+    // Skip anything already sitting inside (or near) the collection circle
+    const dFromCircle = Math.hypot(
+      o.position.x - COLLECTION_CENTER.x,
+      o.position.z - COLLECTION_CENTER.z
+    );
+    if (dFromCircle < COLLECTION_RADIUS + 0.15) return;
+    // Prefer closest to the ROBOT (smooth motion) but reachable
+    const dFromRobot = Math.hypot(
+      o.position.x - arm.robotBase.position.x,
+      o.position.z - arm.robotBase.position.z
+    );
+    // Score: prefer close objects (higher score = better)
+    const score = -dFromRobot;
+    if (score > bestScore) { bestScore = score; best = o; }
+  });
+  return best;
+}
+
+// Navigate robot to within pickable range of a target (x,z on floor)
+async function navigateNear(targetX, targetZ, approachDist) {
+  const rbPos = arm.robotBase.position;
+  const dx = targetX - rbPos.x;
+  const dz = targetZ - rbPos.z;
+  const dist = Math.hypot(dx, dz);
+  if (dist < approachDist + 0.02) return;  // already close enough
+  const nx = dx / dist, nz = dz / dist;
+  const travel = dist - approachDist;
+  const navTarget = new THREE.Vector3(
+    rbPos.x + nx * travel, 0, rbPos.z + nz * travel
+  );
+  // Duration scales with travel distance so speed stays roughly constant
+  const duration = Math.max(600, Math.min(2600, travel * 900));
+  await pAnimateBaseTo(navTarget, duration);
+}
+
+// Safely release the held object at the gripper's current world position
+// (used when the loop is aborted mid-cycle)
+function safeReleaseHeld() {
+  if (!heldObj) return;
+  const gripWorld = new THREE.Vector3();
+  arm.gripper.updateWorldMatrix(true, false);
+  arm.gripper.getWorldPosition(gripWorld);
+  gripWorld.y = 0.08; // place on floor
+  releaseObject(gripWorld);
+}
+
+// One full pick + deposit cycle, smooth and deterministic
+async function doGatherCycle(obj) {
+  if (autoSimAborted) return false;
+
+  // ── 1. Drive to the object ───────────────────────────────────
+  toast('SEEKING OBJECT');
+  await navigateNear(obj.position.x, obj.position.z, 0.36);
+  if (autoSimAborted) return false;
+
+  // ── 2. Pick it up (approach, descend, close, lift) ───────────
+  const objPos   = obj.position.clone();
+  const abovePos = objPos.clone().add(new THREE.Vector3(0, 0.30, 0));
+  const pickPos  = objPos.clone().add(new THREE.Vector3(0, 0.05, 0));
+  const ikAbove  = solveIK(abovePos);
+  const ikPick   = solveIK(pickPos);
+
+  if (!ikAbove || !ikPick) {
+    // Unreachable — skip for now (shouldn't really happen after navigation)
+    logEvent(EV.GRASP_FAILURE, 'unreachable, skipping');
+    return true;
+  }
+
+  recordPickAttempt();
+  toast('GRIPPING');
+  const overrides = { wristRoll: 0, wristYaw: 0 };
+
+  await pAnimateTo({ ...ikAbove, gripper: 1.0, ...overrides }, 700);
+  if (autoSimAborted) return false;
+  await pAnimateTo({ ...ikPick,  gripper: 1.0, ...overrides }, 500);
+  if (autoSimAborted) return false;
+  await pAnimateTo({ ...current, gripper: 0.08 }, 350);
+  if (autoSimAborted) return false;
+
+  pickObject(obj);
+  logEvent(EV.GRASP_SUCCESS, 'secured');
+  flashSuccessIndicator(true);
+
+  await pAnimateTo({ ...ikAbove, gripper: 0.08, ...overrides }, 500);
+  if (autoSimAborted) { safeReleaseHeld(); return false; }
+
+  // ── 3. Drive to the collection circle ────────────────────────
+  toast('RETURNING TO CIRCLE');
+  const dropPos   = getNextDropPosition();
+  // Stand at a consistent angle beside the drop point so the IK is reachable
+  const standAngle = Math.random() * Math.PI * 2;
+  const standX = dropPos.x + Math.cos(standAngle) * COLLECTION_NAV_RADIUS;
+  const standZ = dropPos.z + Math.sin(standAngle) * COLLECTION_NAV_RADIUS;
+  // Clamp to floor bounds
+  const clampedX = Math.max(-4.5, Math.min(4.5, standX));
+  const clampedZ = Math.max(-4.5, Math.min(4.5, standZ));
+  await navigateNear(clampedX, clampedZ, 0.0);
+  if (autoSimAborted) { safeReleaseHeld(); return false; }
+
+  // ── 4. Place the object into the circle ──────────────────────
+  toast('PLACING IN CIRCLE');
+  const dropAbove = dropPos.clone().add(new THREE.Vector3(0, 0.28, 0));
+  const ikDropAbove = solveIK(dropAbove);
+  const ikDropPlace = solveIK(dropPos);
+
+  if (ikDropAbove && ikDropPlace) {
+    await pAnimateTo({ ...ikDropAbove, gripper: 0.08, ...overrides }, 700);
+    if (autoSimAborted) return false;
+    await pAnimateTo({ ...ikDropPlace, gripper: 0.08, ...overrides }, 500);
+    if (autoSimAborted) return false;
+    await pAnimateTo({ ...current, gripper: 0.85 }, 350);
+    releaseObject(dropPos);
+    recordPickSuccess();
+    // "Remaining" = objects still outside the collection circle
+    const remaining = objects.filter(o => Math.hypot(
+      o.position.x - COLLECTION_CENTER.x,
+      o.position.z - COLLECTION_CENTER.z
+    ) >= COLLECTION_RADIUS + 0.15).length;
+    logEvent(EV.PLACE_OBJECT, `dropped · remaining=${remaining}`);
+    updateMetricsUI();
+    await pAnimateTo({ ...ikDropAbove, gripper: 0.85, ...overrides }, 500);
+  } else {
+    // IK blew up — just drop the held object at a safe spot
+    releaseObject(dropPos);
+    updateMetricsUI();
+  }
+
+  return true;
+}
+
+async function runGatherLoop() {
+  try {
+    while (autoSimRunning && !autoSimAborted) {
+      // Find next object to gather (outside the circle)
+      const target = pickTargetObject();
+      if (!target) {
+        // All clear
+        toast('AREA CLEARED ✓');
+        logEvent(EV.TASK_COMPLETE, `gather done · total=${metrics.successfulPicks}`);
+        // Return to home pose, then stop
+        await pAnimateTo(
+          { base:0, shoulder:0, elbow:0, wristPitch:0, wristRoll:0, wristYaw:0, gripper:0.5 },
+          800
+        );
+        stopAutoSim();
+        return;
+      }
+      await doGatherCycle(target);
+      // Brief settle between cycles so it looks natural
+      if (!autoSimAborted) await pWait(150);
+    }
+  } catch (err) {
+    console.error('Gather loop error:', err);
+    logEvent(EV.GRASP_FAILURE, 'loop-error: ' + err.message);
+    stopAutoSim();
+  }
+}
+
+// Button bindings for new stochastic controls
+document.getElementById('btn-normal-mode').addEventListener('click', () => setScenario('normal'));
+document.getElementById('btn-stress-mode').addEventListener('click', () => setScenario('stress'));
+document.getElementById('btn-auto-sim').addEventListener('click', startAutoSim);
+document.getElementById('btn-stop-sim').addEventListener('click', stopAutoSim);
+document.getElementById('btn-monte-carlo').addEventListener('click', () => runMonteCarlo(100));
+
+// Patch processKeys collision detection to record simulation collisions
+// Wrap the existing collision feedback to also fire EV.COLLISION
+const _origCheckCollisions = checkCollisions;
+// (checkCollisions is not overridden — we hook into the existing blocked flag reset)
+// Instead, we watch for collision events in the existing code path via the motion-label text
+const _collisionObserver = new MutationObserver(() => {
+  const lbl = document.getElementById('motion-label');
+  if (lbl && lbl.textContent === 'BLOCKED' && autoSimRunning) {
+    scheduleEvent(simClock + 10, EV.COLLISION, { detail: 'gripper-obstacle' });
+  }
+});
+const _motionLbl = document.getElementById('motion-label');
+if (_motionLbl) _collisionObserver.observe(_motionLbl, { childList: true, characterData: true, subtree: true });
+
+// Periodic metrics refresh (every ~30 frames) — avoids DOM thrash
+let _metricsRefreshCounter = 0;
+const _origAnimate = animate; // preserve reference
+
+// ── Patch the animation loop to process events + refresh metrics ──
+// We do this by overriding the animate function to inject our work.
+// Since animate() calls requestAnimationFrame(animate), we only need
+// to inject once per frame at the top of the loop.
+let _simFrameCounter = 0;
+(function patchAnimateLoop() {
+  // Intercept by replacing window.requestAnimationFrame calls is complex.
+  // Instead: use a secondary rAF loop that runs alongside the main one.
+  function simTick() {
+    requestAnimationFrame(simTick);
+
+    // Process all pending events
+    processEvents(performance.now());
+
+    // Refresh metrics UI every 30 ticks ≈ 500ms @60fps
+    _simFrameCounter++;
+    if (_simFrameCounter % 30 === 0) {
+      updateMetricsUI();
+    }
+  }
+  simTick();
+})();
+
+// Initialise UI state
+setScenario('normal');
+
+</script>
+</body>
+</html>
